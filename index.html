@@ -1,0 +1,1352 @@
+<!doctype html>
+<html lang="nl-BE">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kaartbeheer">
+<meta name="theme-color" content="#12342e">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Kaartbeheer</title>
+<style>
+/* Layout: één kolom app-scherm met vaste kop en tabbalk onderaan, bladen schuiven van onder in. */
+:root {
+  --bg: #eef2ef;
+  --surface: #ffffff;
+  --sunken: #e3e9e5;
+  --ink: #15221e;
+  --muted: #5a6a64;
+  --line: #d5ddd8;
+  --accent: #12342e;
+  --accent-ink: #ffffff;
+  --brass: #9a6f17;
+  --warn: #a6550a;
+  --warn-bg: #fbecd9;
+  --bad: #b3261e;
+  --bad-bg: #fbe3e0;
+  --ok: #1d7146;
+  --ok-bg: #dff1e6;
+  --shadow: 0 1px 2px rgba(18,52,46,.06), 0 8px 24px rgba(18,52,46,.08);
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --radius: 14px;
+  --dock: 56px; /* vrije ruimte onderaan voor de 'Powered by Netlify'-balk */
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c1311; --surface: #151f1c; --sunken: #1c2925; --ink: #e4ebe8; --muted: #93a39d; --line: #26332f;
+    --accent: #86c9b4; --accent-ink: #0c1311; --brass: #d8b15d;
+    --warn: #f2a654; --warn-bg: #3a2914; --bad: #f28b80; --bad-bg: #3f1c19; --ok: #74d3a0; --ok-bg: #15301f;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c1311; --surface: #151f1c; --sunken: #1c2925; --ink: #e4ebe8; --muted: #93a39d; --line: #26332f;
+  --accent: #86c9b4; --accent-ink: #0c1311; --brass: #d8b15d;
+  --warn: #f2a654; --warn-bg: #3a2914; --bad: #f28b80; --bad-bg: #3f1c19; --ok: #74d3a0; --ok-bg: #15301f;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 var(--font);
+  -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.gutter { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* ---------- vergrendelscherm ---------- */
+#lock {
+  min-height: 100%; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink);
+  padding-block: calc(env(safe-area-inset-top, 0px) + 24px) calc(env(safe-area-inset-bottom, 0px) + var(--dock) + 24px);
+}
+:root:not([data-theme="light"]) #lock { }
+.lock-box { width: 100%; max-width: 360px; display: grid; gap: 20px; }
+.lock-mark { width: 64px; height: 64px; border-radius: 16px; background: rgba(255,255,255,.12); display: grid; place-items: center; }
+.lock-box h1 { font: 700 28px/1.15 var(--display); margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+.lock-box p { margin: 0; opacity: .82; }
+.lock-field { display: grid; gap: 6px; }
+.lock-field label { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; opacity: .75; }
+.lock-field input {
+  width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,.25);
+  background: rgba(255,255,255,.1); color: inherit; font: 600 22px/1 var(--mono); letter-spacing: .2em;
+}
+.lock-field input::placeholder { color: inherit; opacity: .4; letter-spacing: normal; font: 16px var(--font); }
+.lock-btn { padding: 15px; border: 0; border-radius: 12px; background: var(--accent-ink); color: var(--accent); font-weight: 700; font-size: 17px; }
+.lock-err { min-height: 1.4em; font-weight: 600; color: #ffd0c9; }
+.lock-link { background: none; border: 0; color: inherit; opacity: .75; text-decoration: underline; padding: 4px 0; justify-self: start; }
+
+/* ---------- app ---------- */
+#app { min-height: 100%; display: flex; flex-direction: column; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+header.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg);
+  padding-block: 12px 10px; display: grid; gap: 10px; border-bottom: 1px solid transparent;
+}
+header.top.scrolled { border-bottom-color: var(--line); }
+.top-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.top-row h1 { margin: 0; font: 800 30px/1.1 var(--display); letter-spacing: -.02em; }
+.icon-btn {
+  width: 40px; height: 40px; border-radius: 999px; border: 0; background: var(--sunken); color: var(--ink);
+  display: grid; place-items: center; flex: none;
+}
+.icon-btn.primary { background: var(--accent); color: var(--accent-ink); }
+.icon-btn svg { width: 20px; height: 20px; }
+.search { position: relative; }
+.search input {
+  width: 100%; padding: 10px 12px 10px 38px; border-radius: 11px; border: 0; background: var(--sunken);
+}
+.search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--muted); }
+.chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-inline: -4px; padding-inline: 4px; }
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none; border: 1px solid var(--line); background: var(--surface); padding: 6px 12px; border-radius: 999px;
+  font-size: 14px; font-weight: 600; color: var(--muted);
+}
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.chip .n { font-variant-numeric: tabular-nums; opacity: .75; margin-left: 4px; }
+
+main { flex: 1; padding-block: 8px calc(96px + var(--dock) + env(safe-area-inset-bottom, 0px)); }
+.list { display: grid; gap: 10px; }
+.section-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 18px 0 8px; }
+
+.row {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--surface);
+  border: 0; border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow);
+}
+.avatar {
+  width: 42px; height: 42px; border-radius: 999px; flex: none; display: grid; place-items: center;
+  background: var(--sunken); color: var(--accent); font: 700 15px var(--display); letter-spacing: .02em;
+}
+.row-main { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.row-title { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-sub { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-end { display: flex; align-items: center; gap: 6px; flex: none; color: var(--muted); }
+.count { font: 600 14px var(--mono); font-variant-numeric: tabular-nums; }
+
+.pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.pill.warn { background: var(--warn-bg); color: var(--warn); }
+.pill.bad { background: var(--bad-bg); color: var(--bad); }
+.pill.ok { background: var(--ok-bg); color: var(--ok); }
+
+/* kaart-weergave */
+.pcard {
+  position: relative; width: 100%; max-width: 100%; aspect-ratio: 1.586; border-radius: 16px; padding: 16px 18px;
+  color: #f4f7f5; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden;
+  background: linear-gradient(135deg, var(--c1), var(--c2)); box-shadow: var(--shadow); border: 0; text-align: left;
+}
+.pcard::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 80% at 100% 0%, rgba(255,255,255,.14), transparent 60%); pointer-events: none; }
+.pcard.visa { --c1: #1b2f6b; --c2: #2e4fa8; }
+.pcard.mastercard { --c1: #2a2522; --c2: #5a3a22; }
+.pcard.bancontact { --c1: #0c4a66; --c2: #1a7a8c; }
+.pcard.maestro { --c1: #2b2f4d; --c2: #4a4f7a; }
+.pcard.amex { --c1: #1f4f4a; --c2: #3a7d72; }
+.pcard.other { --c1: #2f3a37; --c2: #55625d; }
+.pcard .pc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; position: relative; z-index: 1; }
+.pcard .bank { font: 700 15px var(--display); letter-spacing: .02em; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pcard .brand { font: 800 13px var(--display); letter-spacing: .1em; text-transform: uppercase; opacity: .9; }
+.pcard .chip-ic { width: 38px; height: 28px; border-radius: 6px; background: linear-gradient(135deg, #e7c77a, #b48a35); position: relative; z-index: 1; }
+.pcard .num { font: 600 clamp(16px, 5.2vw, 21px)/1 var(--mono); letter-spacing: .08em; position: relative; z-index: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pcard .pc-bot { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; position: relative; z-index: 1; }
+.pcard .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; opacity: .7; }
+.pcard .holder { font: 600 14px var(--font); text-transform: uppercase; letter-spacing: .04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pcard .exp { font: 600 14px var(--mono); font-variant-numeric: tabular-nums; }
+.pcard .pc-bot > div { min-width: 0; }
+.card-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+.card-item { display: grid; gap: 6px; }
+.card-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-inline: 4px; font-size: 14px; color: var(--muted); }
+.card-meta span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.empty { text-align: center; padding: 48px 16px; color: var(--muted); display: grid; gap: 12px; justify-items: center; }
+.empty h2 { margin: 0; color: var(--ink); font: 700 20px var(--display); }
+.empty p { margin: 0; max-width: 32ch; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 18px; border-radius: 12px;
+  border: 0; font-weight: 650; background: var(--accent); color: var(--accent-ink); min-height: 46px;
+}
+.btn.secondary { background: var(--sunken); color: var(--ink); }
+.btn.danger { background: var(--bad-bg); color: var(--bad); }
+.btn.block { width: 100%; }
+.btn svg { width: 20px; height: 20px; }
+
+/* tabbalk */
+nav.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: grid; grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 0;
+  background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: saturate(1.6) blur(18px); -webkit-backdrop-filter: saturate(1.6) blur(18px);
+  border-top: 1px solid var(--line);
+  padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + var(--dock) + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+}
+nav.tabs { align-content: start; }
+nav.tabs button { border: 0; background: none; display: grid; justify-items: center; gap: 2px; padding: 6px 0; color: var(--muted); font-size: 11px; font-weight: 600; }
+nav.tabs button svg { width: 24px; height: 24px; }
+nav.tabs button[aria-current="page"] { color: var(--accent); }
+
+/* bladen (sheets) */
+.scrim { position: fixed; inset: 0; background: rgba(5,12,10,.45); z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
+.sheet {
+  width: 100%; max-width: 640px; max-height: calc(100% - env(safe-area-inset-top, 0px) - 12px); overflow: auto; background: var(--bg);
+  border-radius: 18px 18px 0 0; animation: up .22s ease-out; -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(24px + var(--dock) + env(safe-area-inset-bottom, 0px));
+}
+@keyframes up { from { transform: translateY(40px); opacity: .3; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+.sheet-head {
+  position: sticky; top: 0; z-index: 2; background: var(--bg); display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding-block: 10px; border-bottom: 1px solid var(--line);
+}
+.sheet-head h2 { margin: 0; font: 700 17px var(--display); text-align: center; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.text-btn { background: none; border: 0; color: var(--accent); font-weight: 600; padding: 8px 4px; min-width: 72px; }
+.text-btn.right { text-align: right; font-weight: 700; }
+.text-btn[disabled] { opacity: .4; }
+.sheet-body { padding-block: 16px; display: grid; gap: 18px; }
+
+.group { background: var(--surface); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+.field { display: grid; gap: 2px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.group > .field:last-child { border-bottom: 0; }
+.field label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.field input, .field select, .field textarea { border: 0; background: none; padding: 4px 0; width: 100%; min-width: 0; font-size: 17px; }
+.field input:focus, .field select:focus, .field textarea:focus { outline: none; }
+.field:focus-within { box-shadow: inset 3px 0 0 var(--accent); }
+.field textarea { resize: vertical; min-height: 64px; }
+.field .mono { font-family: var(--mono); letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; }
+.field-row .field:first-child { border-right: 1px solid var(--line); }
+.hint { font-size: 13px; color: var(--muted); margin: 0; padding-inline: 4px; }
+.hint.bad { color: var(--bad); font-weight: 600; }
+.hint.ok { color: var(--ok); font-weight: 600; }
+
+.scanbox {
+  display: grid; gap: 10px; padding: 14px; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow);
+  border: 1.5px dashed var(--line);
+}
+.scan-status { display: flex; align-items: center; gap: 12px; }
+.scan-status img { width: 84px; aspect-ratio: 1.586; object-fit: cover; border-radius: 8px; flex: none; background: var(--sunken); }
+.scan-status .txt { min-width: 0; display: grid; gap: 6px; flex: 1; font-size: 14px; }
+.bar { height: 6px; border-radius: 99px; background: var(--sunken); overflow: hidden; }
+.bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; padding: 14px; }
+.kv dt { color: var(--muted); font-size: 14px; }
+.kv dd { margin: 0; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.actions .btn { flex: 1 1 140px; }
+.reveal-row { display: flex; gap: 8px; }
+.reveal-row .btn { flex: 1; }
+
+.setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 14px; border: 0; background: none; border-bottom: 1px solid var(--line); text-align: left; }
+.group > .setting:last-child { border-bottom: 0; }
+.setting .s-main { display: grid; gap: 2px; min-width: 0; }
+.setting .s-sub { font-size: 13px; color: var(--muted); }
+.setting.danger { color: var(--bad); }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.stat { background: var(--surface); border-radius: var(--radius); padding: 12px; box-shadow: var(--shadow); display: grid; gap: 2px; }
+.stat b { font: 700 24px var(--display); font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12px; color: var(--muted); }
+
+/* bevestiging + melding */
+.dialog { width: min(100% - 32px, 360px); background: var(--surface); border-radius: 16px; padding: 20px; display: grid; gap: 14px; margin: auto; box-shadow: var(--shadow); }
+.dialog h3 { margin: 0; font: 700 18px var(--display); }
+.dialog p { margin: 0; color: var(--muted); }
+.scrim.center { align-items: center; }
+/* klantenkaarten */
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--sunken); border-radius: 12px; padding: 3px; gap: 3px; }
+.seg button { border: 0; background: none; padding: 9px; border-radius: 9px; font-weight: 650; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.pcard.loyal { --c1: var(--lc); --c2: color-mix(in srgb, var(--lc) 72%, #000); }
+.pcard .store { font: 800 20px/1.1 var(--display); letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.bc-strip { position: relative; z-index: 1; background: #fff; border-radius: 8px; height: 34%; padding: 6px 10px; display: grid; place-items: center; overflow: hidden; }
+.bc-strip svg { width: 100%; height: 100%; display: block; }
+.bc-strip.qr { align-self: flex-start; aspect-ratio: 1; padding: 5px; }
+.bc-none { color: #333; font: 600 14px var(--mono); }
+.pcard .pc-bot > div:last-child { overflow: hidden; }
+.pcard .pc-bot .exp { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bc-panel { background: #fff; color: #111; border-radius: var(--radius); padding: 20px 18px 14px; display: grid; gap: 10px; justify-items: center; box-shadow: var(--shadow); }
+.bc-panel svg { width: 100%; max-width: 380px; height: 110px; display: block; }
+.bc-panel.qr svg { width: 210px; height: 210px; }
+.bc-num { font: 600 18px var(--mono); letter-spacing: .08em; color: #111; overflow-wrap: anywhere; text-align: center; }
+.kassa { position: fixed; inset: 0; z-index: 60; background: #fff; color: #111; display: grid; place-content: center; justify-items: center; gap: 18px; text-align: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + var(--dock) + 24px) max(20px, env(safe-area-inset-left, 0px)); }
+.kassa h3 { margin: 0; font: 800 26px var(--display); color: #111; }
+.kassa svg { width: min(92vw, 560px); height: 170px; display: block; }
+.kassa.qr svg { width: min(78vw, 340px); height: min(78vw, 340px); }
+.kassa p { margin: 0; color: #555; font-size: 14px; }
+.swatches { display: flex; gap: 12px; flex-wrap: wrap; padding: 8px 0 4px; }
+.field .swatches label { width: 34px; height: 34px; border-radius: 999px; background: var(--sw); position: relative; cursor: pointer; text-transform: none; letter-spacing: 0; }
+.swatches input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.swatches span { position: absolute; inset: 0; border-radius: inherit; }
+.swatches input:checked + span { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--ink); }
+.swatches input:focus-visible + span { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent); }
+.field-row.single { grid-template-columns: 1fr; }
+.field-row.single .field:first-child { border-right: 0; }
+#toast {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(88px + var(--dock) + env(safe-area-inset-bottom, 0px)); z-index: 40;
+  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 600; font-size: 15px;
+  max-width: calc(100% - 32px); box-shadow: var(--shadow);
+}
+</style>
+</head>
+<body>
+
+<!-- ============ VERGRENDELING ============ -->
+<section id="lock" class="gutter">
+  <form class="lock-box" id="lockForm" autocomplete="off">
+    <div class="lock-mark" aria-hidden="true">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19"/><path d="M6 15h4"/></svg>
+    </div>
+    <div style="display:grid;gap:8px">
+      <h1 id="lockTitle">Kaartbeheer</h1>
+      <p id="lockText">Voer je toegangscode in.</p>
+    </div>
+    <div class="lock-field">
+      <label for="code1" id="code1Label">Toegangscode</label>
+      <input id="code1" type="password" inputmode="numeric" autocomplete="off" placeholder="Minstens 4 tekens" required minlength="4">
+    </div>
+    <div class="lock-field" id="code2Wrap" hidden>
+      <label for="code2">Herhaal code</label>
+      <input id="code2" type="password" inputmode="numeric" autocomplete="off" placeholder="Nog eens">
+    </div>
+    <div class="lock-err" id="lockErr" role="alert"></div>
+    <button class="lock-btn" id="lockBtn" type="submit">Ontgrendelen</button>
+    <button class="lock-link" id="forgotBtn" type="button">Code vergeten?</button>
+  </form>
+</section>
+
+<!-- ============ APP ============ -->
+<div id="app" hidden>
+  <header class="top gutter" id="top">
+    <div class="top-row">
+      <h1 id="viewTitle">Klanten</h1>
+      <div style="display:flex;gap:8px">
+        <button class="icon-btn" id="lockNow" aria-label="Vergrendelen" title="Vergrendelen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        </button>
+        <button class="icon-btn primary" id="addBtn" aria-label="Toevoegen" title="Toevoegen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="search" id="searchWrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Zoeken" autocomplete="off" aria-label="Zoeken">
+    </div>
+    <div class="chips" id="filters" hidden></div>
+  </header>
+
+  <main class="gutter" id="view"></main>
+
+  <nav class="tabs" aria-label="Hoofdmenu">
+    <button data-tab="klanten" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.2A6.5 6.5 0 0 1 21.5 20"/></svg>
+      Klanten
+    </button>
+    <button data-tab="kaarten">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19M6 15h4"/></svg>
+      Kaarten
+    </button>
+    <button data-tab="instellingen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      Instellingen
+    </button>
+  </nav>
+</div>
+
+<div id="layer"></div>
+<div id="toast" role="status" hidden></div>
+<input id="scanInput" type="file" accept="image/*" capture="environment" hidden>
+<input id="importInput" type="file" accept="application/json,.json" hidden>
+
+<script src="vendor/tesseract.min.js"></script>
+<script src="vendor/jsbarcode.min.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script>
+'use strict';
+/* =========================================================
+   Kaartbeheer – klanten en bankkaarten, volledig offline.
+   Gegevens: versleuteld (AES-GCM, sleutel uit toegangscode via PBKDF2) in IndexedDB.
+   ========================================================= */
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+
+/* ---------- opslag ---------- */
+let dbp = null;
+function idb() {
+  if (!dbp) dbp = new Promise((res, rej) => {
+    const r = indexedDB.open('kaartbeheer', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+  return dbp;
+}
+const PREVIEW = !!window.KB_PREVIEW, MEM = new Map();
+const host = () => document.getElementById('phone') || document.body;
+async function kv(mode, k, v) {
+  if (PREVIEW) { if (mode === 'get') return MEM.get(k); if (mode === 'set') MEM.set(k, v); else MEM.delete(k); return; }
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const st = db.transaction('kv', mode === 'get' ? 'readonly' : 'readwrite').objectStore('kv');
+    const r = mode === 'get' ? st.get(k) : mode === 'set' ? st.put(v, k) : st.delete(k);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+
+/* ---------- versleuteling ---------- */
+const enc = new TextEncoder(), dec = new TextDecoder();
+const b64 = (u8) => btoa(String.fromCharCode(...u8));
+const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+async function deriveKey(code, salt) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(code), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 250000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+let key = null, salt = null;
+let state = { klanten: [], kaarten: [] };
+
+async function sealVault(k, s, data) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, enc.encode(JSON.stringify(data))));
+  return { app: 'kaartbeheer', v: 1, salt: b64(s), iv: b64(iv), ct: b64(ct), updated: new Date().toISOString() };
+}
+async function openVault(vault, code) {
+  const s = unb64(vault.salt);
+  const k = await deriveKey(code, s);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(vault.iv) }, k, unb64(vault.ct));
+  return { k, s, data: JSON.parse(dec.decode(pt)) };
+}
+async function save() {
+  if (PREVIEW) return;
+  await kv('set', 'vault', await sealVault(key, salt, state));
+}
+
+/* ---------- kaartlogica ---------- */
+const digits = (s) => String(s || '').replace(/\D/g, '');
+function luhn(n) {
+  n = digits(n); if (n.length < 12) return false;
+  let sum = 0, alt = false;
+  for (let i = n.length - 1; i >= 0; i--) {
+    let d = +n[i];
+    if (alt) { d *= 2; if (d > 9) d -= 9; }
+    sum += d; alt = !alt;
+  }
+  return sum % 10 === 0;
+}
+function brandOf(n) {
+  n = digits(n);
+  if (/^6703/.test(n)) return 'bancontact';
+  if (/^3[47]/.test(n)) return 'amex';
+  if (/^4/.test(n)) return 'visa';
+  if (/^(5[1-5]|2(2[2-9][1-9]|2[3-9]\d|[3-6]\d\d|7[01]\d|720))/.test(n)) return 'mastercard';
+  if (/^(5[06-9]|6\d)/.test(n)) return 'maestro';
+  return 'other';
+}
+const BRAND_NAME = { visa: 'Visa', mastercard: 'Mastercard', bancontact: 'Bancontact', maestro: 'Maestro', amex: 'Amex', other: 'Kaart' };
+function formatNum(n) {
+  n = digits(n);
+  if (/^3[47]/.test(n)) return n.replace(/^(\d{0,4})(\d{0,6})(\d{0,5}).*/, (m, a, b, c) => [a, b, c].filter(Boolean).join(' '));
+  return n.replace(/(\d{4})(?=\d)/g, '$1 ');
+}
+function maskNum(n) {
+  n = digits(n);
+  if (!n) return '•••• •••• •••• ••••';
+  return '•••• •••• •••• ' + n.slice(-4);
+}
+function parseExp(s) {
+  const m = String(s || '').match(/^\s*(\d{1,2})\s*\/\s*(\d{2}|\d{4})\s*$/);
+  if (!m) return null;
+  const mm = +m[1]; let yy = +m[2]; if (yy < 100) yy += 2000;
+  if (mm < 1 || mm > 12) return null;
+  return new Date(yy, mm, 0, 23, 59, 59); // laatste dag van de maand
+}
+function normExp(s) {
+  const d = digits(s);
+  if (d.length === 4) return d.slice(0, 2) + '/' + d.slice(2);
+  if (d.length === 6) return d.slice(0, 2) + '/' + d.slice(4);
+  return s;
+}
+const SOON_DAYS = 90; // ‘binnenkort’ = binnen 3 maanden
+function status(card) {
+  const d = parseExp(card.vervaldatum);
+  if (!d) return { key: 'none', label: '' };
+  const days = Math.ceil((d - new Date()) / 864e5);
+  if (days < 0) return { key: 'bad', label: 'Vervallen', days };
+  if (days <= SOON_DAYS) return { key: 'warn', label: days <= 31 ? 'Verloopt deze maand' : 'Verloopt binnenkort', days };
+  return { key: 'ok', label: 'Geldig', days };
+}
+const initials = (name) => (name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+const klantById = (id) => state.klanten.find((k) => k.id === id);
+const kaartenVan = (id) => state.kaarten.filter((c) => c.klantId === id);
+const byName = (a, b) => (a.naam || '').localeCompare(b.naam || '', 'nl', { sensitivity: 'base' });
+const byExp = (a, b) => (parseExp(a.vervaldatum) || 8.64e15) - (parseExp(b.vervaldatum) || 8.64e15);
+
+/* ---------- klantenkaarten ---------- */
+const isLoyal = (c) => !!c && c.soort === 'klant';
+const FORMATS = [['CODE128', 'Code 128'], ['EAN13', 'EAN-13'], ['EAN8', 'EAN-8'], ['UPC', 'UPC-A'], ['CODE39', 'Code 39'], ['ITF', 'ITF'], ['QR', 'QR-code'], ['NONE', 'Geen code, enkel nummer']];
+const FORMAT_NAME = Object.fromEntries(FORMATS);
+const LCOLORS = ['#c8102e', '#e35205', '#d99a00', '#2e8540', '#0b6e99', '#1f3a93', '#6b2c91', '#3d3d3d'];
+const SHOPS = ['Delhaize', 'Colruyt Xtra', 'Carrefour Bonus Card', 'Albert Heijn Bonuskaart', 'Lidl Plus', 'Aldi', 'Okay / Spar', 'IKEA Family', 'Kruidvat', 'Di', 'Planet Parfum', 'HEMA', 'Brico Plan-it', 'Gamma', 'Hubo', 'Decathlon', 'Torfs', 'JBC', 'ZEB', 'Standaard Boekhandel', 'Club', 'Fnac', 'MediaMarkt', 'Krëfel', 'Bibliotheek', 'Shell', 'Q8', 'TotalEnergies'];
+function eanOk(d) {
+  if (!/^\d{8,14}$/.test(d)) return false;
+  const body = d.slice(0, -1).split('').reverse(); let sum = 0;
+  body.forEach((x, i) => (sum += +x * (i % 2 === 0 ? 3 : 1)));
+  return (10 - (sum % 10)) % 10 === +d.slice(-1);
+}
+function autoFormat(n) {
+  const d = String(n || '').trim();
+  if (/^\d{13}$/.test(d) && eanOk(d)) return 'EAN13';
+  if (/^\d{8}$/.test(d) && eanOk(d)) return 'EAN8';
+  if (/^\d{12}$/.test(d) && eanOk(d)) return 'UPC';
+  return 'CODE128';
+}
+const fmtOf = (c) => c.formaat || autoFormat(c.nummer);
+const safeColor = (c) => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : LCOLORS[5]);
+function barcodeSVG(value, fmt) {
+  value = String(value || '').trim();
+  if (!value || fmt === 'NONE') return '';
+  try {
+    if (fmt === 'QR') {
+      if (typeof qrcode === 'undefined') return '';
+      const q = qrcode(0, 'M'); q.addData(value); q.make();
+      return q.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+    }
+    if (typeof JsBarcode === 'undefined') return '';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); let ok = true;
+    JsBarcode(svg, value, { format: fmt, displayValue: false, margin: 0, height: 100, width: 2, background: 'transparent', lineColor: '#111', valid: (v) => (ok = v) });
+    if (!ok) return fmt !== 'CODE128' ? barcodeSVG(value, 'CODE128') : '';
+    const w = parseFloat(svg.getAttribute('width')), h = parseFloat(svg.getAttribute('height'));
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`); svg.removeAttribute('width'); svg.removeAttribute('height'); svg.removeAttribute('style');
+    svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('aria-hidden', 'true');
+    return svg.outerHTML;
+  } catch { return fmt !== 'CODE128' ? barcodeSVG(value, 'CODE128') : ''; }
+}
+function loyalCard(c, tag = 'div') {
+  const fmt = fmtOf(c), bc = barcodeSVG(c.nummer, fmt);
+  return `<${tag} class="pcard loyal" style="--lc:${safeColor(c.kleur)}" ${tag === 'button' ? `data-kaart="${c.id}" aria-label="Klantenkaart ${esc(c.winkel)}"` : ''}>
+    <div class="pc-top"><span class="store">${esc(c.winkel || 'Klantenkaart')}</span><span class="brand">Klantenkaart</span></div>
+    <div class="bc-strip ${fmt === 'QR' ? 'qr' : ''}">${bc || `<span class="bc-none">${esc(c.nummer || 'Nog geen nummer')}</span>`}</div>
+    <div class="pc-bot"><div><div class="lbl">Op naam van</div><div class="holder">${esc(c.houder || '—')}</div></div>
+    <div style="text-align:right"><div class="lbl">Nummer</div><div class="exp">${esc(c.nummer || '—')}</div></div></div>
+  </${tag}>`;
+}
+
+/* ---------- UI-basis ---------- */
+let tab = 'klanten', query = '', cardFilter = 'alle';
+const view = $('#view'), layer = $('#layer');
+
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 2400);
+}
+function confirmBox({ title, text, ok = 'Verwijderen', danger = true }) {
+  return new Promise((res) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'scrim center';
+    wrap.innerHTML = `<div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dlgT">
+      <h3 id="dlgT">${esc(title)}</h3><p>${esc(text)}</p>
+      <div class="actions"><button class="btn secondary" data-v="0">Annuleren</button><button class="btn ${danger ? 'danger' : ''}" data-v="1">${esc(ok)}</button></div></div>`;
+    wrap.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-v]');
+      if (b || e.target === wrap) { wrap.remove(); res(b ? b.dataset.v === '1' : false); }
+    });
+    host().appendChild(wrap);
+    $('[data-v="1"]', wrap).focus();
+  });
+}
+
+const sheets = [];
+function openSheet({ title, left = 'Sluiten', right = '', onRight, body, onMount }) {
+  const scrim = document.createElement('div');
+  scrim.className = 'scrim';
+  scrim.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <div class="sheet-head gutter"><button class="text-btn" data-close>${esc(left)}</button><h2>${esc(title)}</h2>
+    ${right ? `<button class="text-btn right" data-right>${esc(right)}</button>` : '<span style="min-width:72px"></span>'}</div>
+    <div class="sheet-body gutter">${body}</div></div>`;
+  const close = () => { scrim.remove(); sheets.splice(sheets.indexOf(close), 1); };
+  scrim.addEventListener('click', (e) => { if (e.target === scrim || e.target.closest('[data-close]')) close(); });
+  if (onRight) $('[data-right]', scrim).addEventListener('click', () => onRight(scrim, close));
+  layer.appendChild(scrim);
+  sheets.push(close);
+  const obj = { el: scrim, close };
+  onMount && onMount(scrim, close, obj);
+  return obj;
+}
+const closeAllSheets = () => [...sheets].reverse().forEach((c) => c());
+
+/* ---------- weergaven ---------- */
+function render() {
+  $$('nav.tabs button').forEach((b) => b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'));
+  $('#viewTitle').textContent = { klanten: 'Klanten', kaarten: 'Kaarten', instellingen: 'Instellingen' }[tab];
+  $('#searchWrap').hidden = tab === 'instellingen';
+  $('#addBtn').hidden = tab === 'instellingen';
+  $('#filters').hidden = tab !== 'kaarten';
+  if (tab === 'klanten') renderKlanten();
+  else if (tab === 'kaarten') renderKaarten();
+  else renderInstellingen();
+}
+
+function matches(hay) { return !query || hay.toLowerCase().includes(query.toLowerCase()); }
+
+function klantRow(k) {
+  const cards = kaartenVan(k.id);
+  const st = cards.map(status);
+  const bad = st.filter((s) => s.key === 'bad').length, warn = st.filter((s) => s.key === 'warn').length;
+  const sub = [k.bedrijf, k.telefoon || k.email].filter(Boolean).join(' · ') || 'Geen contactgegevens';
+  return `<button class="row" data-klant="${k.id}">
+    <span class="avatar" aria-hidden="true">${esc(initials(k.naam))}</span>
+    <span class="row-main"><span class="row-title">${esc(k.naam)}</span><span class="row-sub">${esc(sub)}</span></span>
+    <span class="row-end">
+      ${bad ? `<span class="pill bad">${bad} vervallen</span>` : warn ? `<span class="pill warn">${warn} verloopt</span>` : ''}
+      <span class="count" aria-label="${cards.length} kaarten">${cards.length}</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>
+    </span></button>`;
+}
+
+function renderKlanten() {
+  const list = [...state.klanten].sort(byName).filter((k) =>
+    matches([k.naam, k.bedrijf, k.email, k.telefoon, k.adres, k.notities, ...kaartenVan(k.id).map((c) => isLoyal(c) ? `${c.winkel} ${c.nummer}` : c.bank + ' ' + digits(c.nummer).slice(-4))].join(' ')));
+  if (!state.klanten.length) {
+    view.innerHTML = `<div class="empty">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/></svg>
+      <h2>Nog geen klanten</h2><p>Voeg je eerste klant toe en koppel er daarna kaarten aan, met de hand of via een scan.</p>
+      <button class="btn" data-act="newKlant">Klant toevoegen</button>
+      <button class="btn secondary" data-act="demo">Voorbeeldgegevens laden</button></div>`;
+    return;
+  }
+  if (!list.length) { view.innerHTML = `<div class="empty"><h2>Niets gevonden</h2><p>Geen klant past bij “${esc(query)}”.</p></div>`; return; }
+  // groepeer per beginletter
+  let html = '', letter = '';
+  for (const k of list) {
+    const l = (k.naam || '#')[0].toUpperCase();
+    if (l !== letter && !query) { if (letter) html += '</div>'; html += `<div class="section-label">${esc(l)}</div><div class="list">`; letter = l; }
+    else if (!letter && query) { html += '<div class="list">'; letter = '*'; }
+    html += klantRow(k);
+  }
+  view.innerHTML = html + '</div>';
+}
+
+function pcard(c, { reveal = false, tag = 'div' } = {}) {
+  if (isLoyal(c)) return loyalCard(c, tag);
+  const b = brandOf(c.nummer);
+  return `<${tag} class="pcard ${b}" ${tag === 'button' ? `data-kaart="${c.id}" aria-label="${esc(BRAND_NAME[b])} eindigend op ${digits(c.nummer).slice(-4)}"` : ''}>
+    <div class="pc-top"><span class="bank">${esc(c.bank || c.label || BRAND_NAME[b])}</span><span class="brand">${BRAND_NAME[b]}</span></div>
+    <div class="chip-ic" aria-hidden="true"></div>
+    <div class="num" data-num>${reveal ? formatNum(c.nummer) : maskNum(c.nummer)}</div>
+    <div class="pc-bot"><div><div class="lbl">Kaarthouder</div><div class="holder">${esc(c.houder || '—')}</div></div>
+    <div style="text-align:right"><div class="lbl">Geldig tot</div><div class="exp">${esc(c.vervaldatum || '--/--')}</div></div></div>
+  </${tag}>`;
+}
+function cardItem(c, showKlant = true) {
+  const st = status(c), k = klantById(c.klantId);
+  return `<div class="card-item">${pcard(c, { tag: 'button' })}
+    <div class="card-meta"><span>${showKlant ? esc(k ? k.naam : isLoyal(c) ? 'Eigen kaart' : 'Zonder klant') : esc(isLoyal(c) ? 'Klantenkaart' : c.label || '')}</span>
+    ${st.label ? `<span class="pill ${st.key}">${st.label}</span>` : ''}</div></div>`;
+}
+
+function renderKaarten() {
+  const all = state.kaarten;
+  const counts = { alle: all.length, bank: all.filter((c) => !isLoyal(c)).length, klant: all.filter(isLoyal).length, binnenkort: all.filter((c) => status(c).key === 'warn').length, vervallen: all.filter((c) => status(c).key === 'bad').length };
+  $('#filters').innerHTML = [['alle', 'Alle'], ['bank', 'Bankkaarten'], ['klant', 'Klantenkaarten'], ['binnenkort', 'Verloopt binnenkort'], ['vervallen', 'Vervallen']]
+    .map(([v, l]) => `<button class="chip" data-filter="${v}" aria-pressed="${cardFilter === v}">${l}<span class="n">${counts[v]}</span></button>`).join('');
+  let list = [...all].sort(byExp);
+  if (cardFilter === 'bank') list = list.filter((c) => !isLoyal(c));
+  if (cardFilter === 'klant') list = list.filter(isLoyal);
+  if (cardFilter === 'binnenkort') list = list.filter((c) => status(c).key === 'warn');
+  if (cardFilter === 'vervallen') list = list.filter((c) => status(c).key === 'bad');
+  list = list.filter((c) => { const k = klantById(c.klantId); return matches((isLoyal(c) ? [c.winkel, c.nummer, c.houder, c.notities, 'klantenkaart', k && k.naam] : [c.bank, c.houder, c.label, c.notities, BRAND_NAME[brandOf(c.nummer)], digits(c.nummer).slice(-4), k && k.naam]).join(' ')); });
+  if (!all.length) {
+    view.innerHTML = `<div class="empty">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19M6 15h4"/></svg>
+      <h2>Nog geen kaarten</h2><p>Voeg een bankkaart of een klantenkaart toe. Scan ze met de camera of typ de gegevens in.</p>
+      <button class="btn" data-act="newKaart">Kaart toevoegen</button></div>`;
+    return;
+  }
+  view.innerHTML = list.length ? `<div class="card-grid" style="margin-top:8px">${list.map((c) => cardItem(c)).join('')}</div>`
+    : `<div class="empty"><h2>Geen kaarten</h2><p>Er zijn geen kaarten in deze selectie.</p></div>`;
+}
+
+async function renderInstellingen() {
+  const vault = await kv('get', 'vault');
+  const upd = vault && vault.updated ? new Date(vault.updated).toLocaleString('nl-BE', { dateStyle: 'medium', timeStyle: 'short' }) : '–';
+  let lastBackup = null; try { lastBackup = localStorage.getItem('kb-backup'); } catch {}
+  const st = state.kaarten.map(status);
+  view.innerHTML = `
+    <div class="stats" style="margin-top:8px">
+      <div class="stat"><b>${state.klanten.length}</b><span>klanten</span></div>
+      <div class="stat"><b>${state.kaarten.length}</b><span>kaarten</span></div>
+      <div class="stat"><b style="color:var(--warn)">${st.filter((s) => s.key === 'warn' || s.key === 'bad').length}</b><span>aandacht nodig</span></div>
+    </div>
+    <div class="section-label">Back-up</div>
+    <div class="group">
+      <button class="setting" data-act="export"><span class="s-main"><span>Back-up maken</span><span class="s-sub">Versleuteld bestand, te openen met je toegangscode${lastBackup ? ` · laatst: ${esc(new Date(lastBackup).toLocaleDateString('nl-BE'))}` : ''}</span></span>›</button>
+      <button class="setting" data-act="import"><span class="s-main"><span>Back-up terugzetten</span><span class="s-sub">Vervangt alle gegevens op dit toestel</span></span>›</button>
+    </div>
+    <div class="section-label">Beveiliging</div>
+    <div class="group">
+      <button class="setting" data-act="changeCode"><span class="s-main"><span>Toegangscode wijzigen</span></span>›</button>
+      <div class="setting"><span class="s-main"><span>Automatisch vergrendelen</span><span class="s-sub">Na 1 minuut in de achtergrond</span></span><span class="pill ok">Aan</span></div>
+    </div>
+    <div class="section-label">Gegevens</div>
+    <div class="group">
+      <div class="setting"><span class="s-main"><span>Laatst opgeslagen</span><span class="s-sub">${esc(upd)} · alleen op dit toestel</span></span></div>
+      <button class="setting danger" data-act="wipe"><span class="s-main"><span>Alles wissen</span><span class="s-sub">Verwijdert alle klanten, kaarten en de code</span></span></button>
+    </div>
+    <p class="hint" style="margin-top:16px">Gegevens blijven op deze iPhone en worden versleuteld bewaard. Er wordt niets via internet verstuurd. Beveiligingscodes (CVC) worden bewust niet bewaard.</p>`;
+}
+
+/* ---------- formulieren ---------- */
+function klantForm(k) {
+  const isNew = !k; k = k || {};
+  openSheet({
+    title: isNew ? 'Nieuwe klant' : 'Klant bewerken', left: 'Annuleren', right: 'Bewaar',
+    body: `<form class="group" id="kf" autocomplete="off">
+      <div class="field"><label for="kNaam">Naam</label><input id="kNaam" name="naam" required value="${esc(k.naam)}" placeholder="Voor- en achternaam" autocapitalize="words"></div>
+      <div class="field"><label for="kBedrijf">Bedrijf</label><input id="kBedrijf" name="bedrijf" value="${esc(k.bedrijf)}" placeholder="Optioneel"></div>
+      <div class="field"><label for="kTel">Telefoon</label><input id="kTel" name="telefoon" type="tel" value="${esc(k.telefoon)}" placeholder="+32 …"></div>
+      <div class="field"><label for="kMail">E-mail</label><input id="kMail" name="email" type="email" value="${esc(k.email)}" autocapitalize="off"></div>
+      <div class="field"><label for="kAdres">Adres</label><textarea id="kAdres" name="adres" rows="2">${esc(k.adres)}</textarea></div>
+      <div class="field"><label for="kNot">Notities</label><textarea id="kNot" name="notities" rows="3">${esc(k.notities)}</textarea></div>
+    </form>`,
+    onMount: (el) => isNew && setTimeout(() => $('#kNaam', el).focus(), 250),
+    onRight: async (el, close) => {
+      const f = $('#kf', el); const fd = Object.fromEntries(new FormData(f));
+      if (!fd.naam.trim()) { $('#kNaam', el).focus(); toast('Vul een naam in'); return; }
+      Object.keys(fd).forEach((x) => (fd[x] = fd[x].trim()));
+      if (isNew) state.klanten.push({ id: uid(), ...fd, aangemaakt: new Date().toISOString() });
+      else Object.assign(klantById(k.id), fd);
+      await save(); close(); render(); refreshDetail();
+      toast(isNew ? 'Klant toegevoegd' : 'Klant bewaard');
+    }
+  });
+}
+
+let detailRef = null, formRefs = [];
+function refreshDetail() { if (detailRef && document.body.contains(detailRef.el)) detailRef.fill(); }
+function klantDetail(id) {
+  const ref = openSheet({ title: '', left: 'Terug', right: 'Wijzig', body: '<div id="kd"></div>',
+    onRight: () => klantForm(klantById(id)) });
+  ref.fill = () => {
+    const k = klantById(id); if (!k) { ref.close(); return; }
+    $('.sheet-head h2', ref.el).textContent = k.naam;
+    const cards = kaartenVan(id).sort(byExp);
+    const rows = [['Bedrijf', k.bedrijf], ['Telefoon', k.telefoon], ['E-mail', k.email], ['Adres', k.adres]].filter((r) => r[1]);
+    $('#kd', ref.el).innerHTML = `<div style="display:grid;gap:18px">
+      <div style="display:flex;gap:14px;align-items:center"><span class="avatar" style="width:56px;height:56px;font-size:19px">${esc(initials(k.naam))}</span>
+        <div style="min-width:0"><div style="font:700 22px var(--display);overflow-wrap:anywhere">${esc(k.naam)}</div><div class="row-sub">${cards.length} ${cards.length === 1 ? 'kaart' : 'kaarten'}</div></div></div>
+      ${rows.length ? `<dl class="group kv">${rows.map(([a, b]) => `<dt>${a}</dt><dd>${esc(b)}</dd>`).join('')}</dl>` : ''}
+      ${k.notities ? `<div class="group" style="padding:14px;white-space:pre-wrap">${esc(k.notities)}</div>` : ''}
+      <div><div class="section-label" style="margin-top:0">Kaarten</div>
+        ${cards.length ? `<div class="card-grid">${cards.map((c) => cardItem(c, false)).join('')}</div>` : '<p class="hint">Nog geen kaarten voor deze klant.</p>'}</div>
+      <div class="actions"><button class="btn" data-act="kaartFor" data-soort="bank" data-id="${id}">Bankkaart toevoegen</button>
+        <button class="btn secondary" data-act="kaartFor" data-soort="klant" data-id="${id}">Klantenkaart toevoegen</button></div>
+      <button class="btn danger block" data-act="delKlant" data-id="${id}">Klant verwijderen</button></div>`;
+  };
+  ref.fill(); detailRef = ref;
+}
+
+function kaartForm(c, opts = {}) {
+  const isNew = !c; c = c || { klantId: opts.klantId || '', soort: opts.soort === 'klant' ? 'klant' : 'bank' };
+  let soort = isLoyal(c) ? 'klant' : 'bank';
+  const L = soort === 'klant';
+  const klantOpts = [...state.klanten].sort(byName).map((k) => `<option value="${k.id}" ${k.id === c.klantId ? 'selected' : ''}>${esc(k.naam)}</option>`).join('');
+  const kleur = safeColor(c.kleur);
+  const ref = openSheet({
+    title: isNew ? 'Nieuwe kaart' : L ? 'Klantenkaart bewerken' : 'Bankkaart bewerken', left: 'Annuleren', right: 'Bewaar',
+    body: `
+      ${isNew ? `<div class="seg" role="group" aria-label="Soort kaart"><button type="button" data-soort="bank">Bankkaart</button><button type="button" data-soort="klant">Klantenkaart</button></div>` : ''}
+      <div class="scanbox" id="scanbox">
+        <div class="scan-status" id="scanStatus" hidden><img id="scanImg" alt="Gescande kaart"><div class="txt"><span id="scanMsg">Kaart lezen…</span><div class="bar"><i id="scanBar"></i></div></div></div>
+        <button class="btn block" type="button" data-act="scan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V6a3 3 0 0 1 3-3h2M16 3h2a3 3 0 0 1 3 3v2M21 16v2a3 3 0 0 1-3 3h-2M8 21H6a3 3 0 0 1-3-3v-2"/><path d="M7 12h10"/></svg><span id="scanLbl">Kaart scannen</span></button>
+        <p class="hint" id="scanHint"></p>
+      </div>
+      <div id="preview"></div>
+      <form class="group" id="cf" autocomplete="off">
+        <div class="field"><label for="cKlant">Klant</label><select id="cKlant" name="klantId"><option value="" id="noKlant">Kies een klant…</option>${klantOpts}<option value="__new">+ Nieuwe klant…</option></select></div>
+        <div class="field" data-for="klant"><label for="cWinkel">Winkel of merk</label><input id="cWinkel" name="winkel" value="${esc(c.winkel)}" placeholder="Delhaize" list="winkels"></div>
+        <div class="field" data-for="klant"><label for="cLNum">Kaartnummer</label><input id="cLNum" name="lnummer" class="mono" value="${esc(L ? c.nummer : '')}" autocapitalize="characters" placeholder="Nummer onder de barcode"></div>
+        <div class="field" data-for="klant"><label for="cFmt">Soort code</label><select id="cFmt" name="formaat"><option value="">Automatisch</option>${FORMATS.map(([v, n]) => `<option value="${v}" ${c.formaat === v ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+        <div class="field" data-for="bank"><label for="cNum">Kaartnummer</label><input id="cNum" name="nummer" class="mono" inputmode="numeric" autocomplete="off" value="${esc(L ? '' : formatNum(c.nummer))}" placeholder="0000 0000 0000 0000"></div>
+        <div class="field-row" id="expRow">
+          <div class="field"><label for="cExp">Geldig tot</label><input id="cExp" name="vervaldatum" class="mono" inputmode="numeric" value="${esc(c.vervaldatum)}" placeholder="MM/JJ" maxlength="5"></div>
+          <div class="field" data-for="bank"><label for="cBank">Bank</label><input id="cBank" name="bank" value="${esc(c.bank)}" placeholder="KBC" list="banken"></div>
+        </div>
+        <div class="field"><label for="cHouder" id="houderLbl">Kaarthouder</label><input id="cHouder" name="houder" value="${esc(c.houder)}" placeholder="Naam op de kaart"></div>
+        <div class="field" data-for="bank"><label for="cLabel">Omschrijving</label><input id="cLabel" name="label" value="${esc(c.label)}" placeholder="Zakelijke debetkaart"></div>
+        <div class="field" data-for="klant"><label id="kleurLbl">Kleur</label><div class="swatches" role="radiogroup" aria-labelledby="kleurLbl">${LCOLORS.map((col) => `<label style="--sw:${col}"><input type="radio" name="kleur" value="${col}" aria-label="Kleur ${col}" ${col === kleur ? 'checked' : ''}><span></span></label>`).join('')}</div></div>
+        <div class="field"><label for="cNot">Notities</label><textarea id="cNot" name="notities" rows="2">${esc(c.notities)}</textarea></div>
+      </form>
+      <p class="hint" id="numHint"></p>
+      <datalist id="banken">${BANKS.map((b) => `<option value="${esc(b[1])}">`).join('')}</datalist>
+      <datalist id="winkels">${SHOPS.map((b) => `<option value="${esc(b)}">`).join('')}</datalist>`,
+    onMount: (el, _c, r) => {
+      const f = $('#cf', el);
+      const g = (n) => (f.elements[n] && f.elements[n].value || '').trim();
+      const collect = () => soort === 'klant'
+        ? { soort: 'klant', klantId: g('klantId'), winkel: g('winkel'), nummer: g('lnummer'), formaat: g('formaat'), vervaldatum: normExp(g('vervaldatum')), houder: g('houder'), kleur: (f.querySelector('input[name=kleur]:checked') || {}).value || kleur, notities: g('notities') }
+        : { soort: 'bank', klantId: g('klantId'), nummer: digits(g('nummer')), vervaldatum: normExp(g('vervaldatum')), bank: g('bank'), houder: g('houder'), label: g('label'), notities: g('notities') };
+      const upd = () => {
+        const d = collect();
+        $('#preview', el).innerHTML = pcard(d, { reveal: true });
+        const h = $('#numHint', el);
+        if (soort === 'klant') {
+          h.className = 'hint';
+          h.textContent = d.nummer ? `Code: ${FORMAT_NAME[fmtOf(d)]}${d.formaat ? '' : ' (automatisch gekozen)'}` : '';
+          return;
+        }
+        const n = d.nummer;
+        if (!n) { h.textContent = ''; h.className = 'hint'; }
+        else if (n.length < 13) { h.textContent = `${n.length} cijfers ingevuld`; h.className = 'hint'; }
+        else if (luhn(n)) { h.textContent = `✓ Geldig ${BRAND_NAME[brandOf(n)]}-nummer`; h.className = 'hint ok'; }
+        else { h.textContent = 'Dit nummer klopt niet (controlecijfer). Kijk het na.'; h.className = 'hint bad'; }
+      };
+      const setSoort = (s) => {
+        soort = s;
+        $$('[data-for]', el).forEach((x) => (x.hidden = x.dataset.for !== s));
+        $$('.seg button', el).forEach((b) => b.setAttribute('aria-pressed', b.dataset.soort === s));
+        $('#expRow', el).classList.toggle('single', s === 'klant');
+        $('#noKlant', el).textContent = s === 'klant' ? 'Geen klant (eigen kaart)' : 'Kies een klant…';
+        $('#scanLbl', el).textContent = s === 'klant' ? 'Barcode scannen' : 'Kaart scannen';
+        $('#scanHint', el).textContent = s === 'klant'
+          ? 'Richt op de barcode of QR-code. Lukt dat niet, dan leest de app het nummer eronder. Alles gebeurt op je toestel.'
+          : 'Leg de kaart plat in goed licht en vul het beeld. De herkenning gebeurt op je toestel; de foto wordt niet bewaard.';
+        $('#houderLbl', el).textContent = s === 'klant' ? 'Op naam van' : 'Kaarthouder';
+        $('#cHouder', el).setAttribute('autocapitalize', s === 'klant' ? 'words' : 'characters');
+        upd();
+      };
+      $$('.seg button', el).forEach((b) => b.addEventListener('click', () => setSoort(b.dataset.soort)));
+      $('#cNum', el).addEventListener('input', (e) => { const p = e.target.selectionStart === e.target.value.length; e.target.value = formatNum(e.target.value).slice(0, 23); if (p) e.target.selectionStart = e.target.selectionEnd = e.target.value.length; });
+      $('#cExp', el).addEventListener('input', (e) => {
+        let d = digits(e.target.value).slice(0, 4);
+        if (d.length === 1 && +d > 1) d = '0' + d;
+        e.target.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+      });
+      f.addEventListener('input', upd);
+      f.addEventListener('change', upd);
+      $('#cKlant', el).addEventListener('change', (e) => {
+        if (e.target.value !== '__new') return;
+        e.target.value = c.klantId || '';
+        const before = state.klanten.length;
+        klantForm();
+        const obs = setInterval(() => {
+          if (!sheets.length || sheets[sheets.length - 1] === r.close) {
+            clearInterval(obs);
+            if (state.klanten.length > before) {
+              const nk = state.klanten[state.klanten.length - 1];
+              const o = document.createElement('option'); o.value = nk.id; o.textContent = nk.naam; o.selected = true;
+              e.target.insertBefore(o, e.target.lastElementChild);
+            }
+          }
+        }, 300);
+      });
+      r.update = upd; r.getSoort = () => soort; r.collect = collect;
+      formRefs.push(r);
+      setSoort(soort);
+    },
+    onRight: async (el, close) => {
+      const d = ref.collect();
+      if (d.klantId === '__new') d.klantId = '';
+      if (d.soort === 'bank') {
+        if (!d.klantId) { toast('Kies een klant'); $('#cKlant', el).focus(); return; }
+        if (d.nummer.length < 12 || d.nummer.length > 19) { toast('Kaartnummer is onvolledig'); $('#cNum', el).focus(); return; }
+      } else {
+        if (!d.winkel) { toast('Vul de winkel in'); $('#cWinkel', el).focus(); return; }
+        if (!d.nummer) { toast('Vul het kaartnummer in'); $('#cLNum', el).focus(); return; }
+      }
+      if (d.vervaldatum && !parseExp(d.vervaldatum)) { toast('Datum moet MM/JJ zijn'); $('#cExp', el).focus(); return; }
+      const dup = state.kaarten.find((x) => x.nummer === d.nummer && x.id !== c.id && isLoyal(x) === isLoyal(d));
+      if (dup && !(await confirmBox({ title: 'Kaart bestaat al', text: `Deze kaart staat al bij ${klantById(dup.klantId)?.naam || 'je eigen kaarten'}. Toch bewaren?`, ok: 'Toch bewaren', danger: false }))) return;
+      if (isNew) state.kaarten.push({ id: uid(), ...d, aangemaakt: new Date().toISOString() });
+      else Object.assign(state.kaarten.find((x) => x.id === c.id), d);
+      await save(); close(); render(); refreshDetail();
+      toast(isNew ? 'Kaart toegevoegd' : 'Kaart bewaard');
+    }
+  });
+  return ref;
+}
+
+function showKassa(c) {
+  const fmt = fmtOf(c);
+  const ov = document.createElement('div');
+  ov.className = 'kassa' + (fmt === 'QR' ? ' qr' : '');
+  ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', 'Barcode voor de kassa');
+  ov.innerHTML = `<h3>${esc(c.winkel)}</h3>${barcodeSVG(c.nummer, fmt)}<div class="bc-num">${esc(c.nummer)}</div><p>Zet je scherm helder. Tik om te sluiten.</p>`;
+  let lock = null;
+  try { navigator.wakeLock && navigator.wakeLock.request('screen').then((l) => (lock = l)).catch(() => {}); } catch {}
+  ov.addEventListener('click', () => { ov.remove(); try { lock && lock.release(); } catch {} });
+  host().appendChild(ov);
+}
+
+function kaartDetail(id) {
+  const c = state.kaarten.find((x) => x.id === id); const k = klantById(c.klantId); const st = status(c);
+  const ref = openSheet({ title: isLoyal(c) ? c.winkel || 'Klantenkaart' : 'Bankkaart', left: 'Terug', right: 'Wijzig', body: '<div id="cd"></div>',
+    onRight: (el, close) => { close(); kaartForm(state.kaarten.find((x) => x.id === id)); } });
+  const copyBtn = (target) => async () => {
+    try { await navigator.clipboard.writeText(c.nummer); toast('Nummer gekopieerd'); }
+    catch { const r = document.createRange(); r.selectNodeContents(target()); getSelection().removeAllRanges(); getSelection().addRange(r); toast('Selecteer en kopieer'); }
+  };
+  if (isLoyal(c)) {
+    const fmt = fmtOf(c), bc = barcodeSVG(c.nummer, fmt);
+    $('#cd', ref.el).innerHTML = `<div style="display:grid;gap:18px">
+      ${pcard(c)}
+      <div class="bc-panel ${fmt === 'QR' ? 'qr' : ''}">${bc}<div class="bc-num">${esc(c.nummer)}</div></div>
+      <div class="reveal-row">${bc ? '<button class="btn" data-kassa>Toon aan de kassa</button>' : ''}<button class="btn secondary" data-copy>Kopieer nummer</button></div>
+      <dl class="group kv">
+        <dt>Klant</dt><dd>${k ? `<button class="text-btn" style="padding:0;min-width:0" data-act="openKlant" data-id="${k.id}">${esc(k.naam)}</button>` : 'Eigen kaart'}</dd>
+        <dt>Winkel</dt><dd>${esc(c.winkel)}</dd>
+        <dt>Soort code</dt><dd>${FORMAT_NAME[fmt]}</dd>
+        ${c.houder ? `<dt>Op naam van</dt><dd>${esc(c.houder)}</dd>` : ''}
+        ${c.vervaldatum ? `<dt>Geldig tot</dt><dd>${esc(c.vervaldatum)} ${st.label ? `<span class="pill ${st.key}">${st.label}</span>` : ''}</dd>` : ''}
+      </dl>
+      ${c.notities ? `<div class="group" style="padding:14px;white-space:pre-wrap">${esc(c.notities)}</div>` : ''}
+      <button class="btn danger block" data-act="delKaart" data-id="${id}">Kaart verwijderen</button></div>`;
+    const kb = $('[data-kassa]', ref.el); kb && kb.addEventListener('click', () => showKassa(c));
+    $('[data-copy]', ref.el).addEventListener('click', copyBtn(() => $('.bc-num', ref.el)));
+    return;
+  }
+  let timer = null;
+  $('#cd', ref.el).innerHTML = `<div style="display:grid;gap:18px">
+    ${pcard(c)}
+    <div class="reveal-row"><button class="btn secondary" data-reveal>Toon nummer</button><button class="btn secondary" data-copy>Kopieer nummer</button></div>
+    <dl class="group kv">
+      <dt>Klant</dt><dd>${k ? `<button class="text-btn" style="padding:0;min-width:0" data-act="openKlant" data-id="${k.id}">${esc(k.naam)}</button>` : '—'}</dd>
+      <dt>Type</dt><dd>${BRAND_NAME[brandOf(c.nummer)]}</dd>
+      ${c.bank ? `<dt>Bank</dt><dd>${esc(c.bank)}</dd>` : ''}
+      ${c.label ? `<dt>Omschrijving</dt><dd>${esc(c.label)}</dd>` : ''}
+      <dt>Geldig tot</dt><dd>${esc(c.vervaldatum || '—')} ${st.label ? `<span class="pill ${st.key}">${st.label}</span>` : ''}</dd>
+      <dt>Controle</dt><dd>${luhn(c.nummer) ? '<span class="pill ok">Nummer geldig</span>' : '<span class="pill bad">Nummer onjuist</span>'}</dd>
+    </dl>
+    ${c.notities ? `<div class="group" style="padding:14px;white-space:pre-wrap">${esc(c.notities)}</div>` : ''}
+    <button class="btn danger block" data-act="delKaart" data-id="${id}">Kaart verwijderen</button></div>`;
+  const num = $('[data-num]', ref.el), rb = $('[data-reveal]', ref.el);
+  const hide = () => { num.textContent = maskNum(c.nummer); rb.textContent = 'Toon nummer'; delete rb.dataset.on; };
+  rb.addEventListener('click', () => {
+    clearTimeout(timer);
+    if (rb.dataset.on) { hide(); return; }
+    num.textContent = formatNum(c.nummer); rb.textContent = 'Verberg'; rb.dataset.on = 1;
+    timer = setTimeout(hide, 15000);
+  });
+  $('[data-copy]', ref.el).addEventListener('click', copyBtn(() => { num.textContent = formatNum(c.nummer); return num; }));
+}
+
+/* ---------- scannen (OCR, volledig lokaal) ---------- */
+const BANKS = [
+  [/BNP\s*PARIBAS|FORTIS/, 'BNP Paribas Fortis'], [/\bKBC\b/, 'KBC'], [/\bCBC\b/, 'CBC'], [/BELFIUS/, 'Belfius'], [/\bING\b/, 'ING'],
+  [/ARGENTA/, 'Argenta'], [/CRELAN/, 'Crelan'], [/\bAXA\b/, 'AXA'], [/BEOBANK/, 'Beobank'], [/\bVDK\b/, 'vdk bank'], [/KEYTRADE/, 'Keytrade Bank'],
+  [/FINTRO/, 'Fintro'], [/HELLO\s*BANK/, 'Hello bank!'], [/\bAION\b/, 'Aion'], [/BPOST/, 'bpost bank'], [/REVOLUT/, 'Revolut'], [/\bN26\b/, 'N26'],
+  [/\bBUNQ\b/, 'bunq'], [/\bWISE\b/, 'Wise'], [/RABO/, 'Rabobank'], [/ABN\s*AMRO/, 'ABN AMRO'], [/SANTANDER/, 'Santander'], [/DEUTSCHE\s*BANK/, 'Deutsche Bank'],
+  [/BANK\s*J\.?\s*VAN\s*BREDA/, 'Bank J. Van Breda'], [/NAGELMACKERS/, 'Nagelmackers'], [/MEDIRECT/, 'MeDirect'], [/TRIODOS/, 'Triodos']
+];
+const NOT_NAME = /\b(VISA|MASTER\s*CARD|MASTERCARD|MAESTRO|BANCONTACT|DEBIT|CREDIT|DEBET|BANK|BANQUE|VALID|THRU|FROM|GOOD|MONTH|YEAR|EXPIRES?|EXP|CARD|KAART|CARTE|PLATINUM|GOLD|BUSINESS|ELECTRON|CONTACTLESS|WORLD|CLASSIC|PREMIUM|SIGNATURE|INFINITE|PAY|PASS|MEMBER|SINCE|BELGIUM|BELGIQUE|EUROPE|INTERNATIONAL|ELITE|CORPORATE|PRIVATE|BNP|PARIBAS|FORTIS|KBC|CBC|BELFIUS|ING|ARGENTA|CRELAN|AXA|BEOBANK|KEYTRADE|FINTRO|REVOLUT|BUNQ|WISE|AMERICAN|EXPRESS|PERSONAL|ACCOUNT|CUSTOMER|SERVICE|AUTHORIZED|SIGNATURE)\b/;
+
+function fixOcrDigits(s) {
+  return s.replace(/[OoQD]/g, '0').replace(/[Il|!]/g, '1').replace(/[Ss$]/g, '5').replace(/B/g, '8').replace(/Z/g, '2').replace(/G/g, '6').replace(/[Tt]/g, '7');
+}
+function parseCardText(full, digitText) {
+  const out = { nummer: '', vervaldatum: '', houder: '', bank: '' };
+  // --- kaartnummer ---
+  const cands = [];
+  const collect = (txt, fix) => {
+    const lines = txt.split(/\n/);
+    for (let line of lines) {
+      if (fix) line = line.replace(/[0-9OoQDIl|!SsBZGT$][0-9OoQDIl|!SsBZGT$\s\-.]{10,}[0-9OoQDIl|!SsBZGT$]/g, (m) => fixOcrDigits(m));
+      const re = /\d[\d \-.]{10,26}\d/g; let m;
+      while ((m = re.exec(line))) {
+        const d = digits(m[0]);
+        if (d.length >= 13 && d.length <= 19) cands.push(d);
+        else if (d.length > 19) { for (const L of [16, 17, 19, 15]) for (let i = 0; i + L <= d.length; i++) cands.push(d.slice(i, i + L)); }
+      }
+    }
+  };
+  collect(digitText, false); collect(full, false); collect(full, true);
+  // ook: samenvoegen van groepjes van 4 die over het hele resultaat verspreid staan
+  const groups = (digitText + '\n' + full).match(/\b\d{4,6}\b/g) || [];
+  for (let i = 0; i + 3 < groups.length; i++) { const d = groups.slice(i, i + 4).join(''); if (d.length >= 15 && d.length <= 19) cands.push(d); }
+  const score = (d) => (luhn(d) ? 100 : 0) + (brandOf(d) !== 'other' ? 10 : 0) + ([16, 17].includes(d.length) ? 5 : d.length === 15 ? 3 : 0);
+  cands.sort((a, b) => score(b) - score(a));
+  if (cands.length) out.nummer = cands[0];
+  out.zeker = cands.length ? luhn(cands[0]) : false;
+  // --- vervaldatum: neem de laatste geldige datum (kaarten tonen soms ook 'geldig vanaf') ---
+  const dates = [];
+  for (const txt of [digitText, full, fixOcrDigits(full)]) {
+    const re = /(?:^|[^\d])(0[1-9]|1[0-2])\s?[\/\\\-]\s?(\d{2})(?!\d)/g; let m;
+    while ((m = re.exec(txt))) { const yy = +m[2]; if (yy >= 10 && yy <= 60) dates.push(`${m[1]}/${m[2]}`); }
+  }
+  if (dates.length) out.vervaldatum = dates.sort((a, b) => parseExp(b) - parseExp(a))[0];
+  // --- bank ---
+  const up = full.toUpperCase();
+  for (const [re, name] of BANKS) if (re.test(up)) { out.bank = name; break; }
+  // --- naam kaarthouder: regel in hoofdletters, 2-4 woorden, zonder trefwoorden ---
+  const names = up.split(/\n/).map((l) => l.replace(/[^A-ZÀ-Ý .'\-]/g, ' ').replace(/\s+/g, ' ').trim())
+    .filter((l) => l.length >= 5 && l.length <= 28 && !NOT_NAME.test(l))
+    .map((l) => l.split(' ').filter((w) => w.length >= 2 || /^[A-Z]\.?$/.test(w)).join(' '))
+    .filter((l) => { const w = l.split(' '); return w.length >= 2 && w.length <= 4 && w.some((x) => x.length >= 3); });
+  if (names.length) out.houder = names.sort((a, b) => b.length - a.length)[0];
+  return out;
+}
+
+let ocrWorker = null, ocrLoading = null, ocrProgress = () => {};
+async function blobUrlOf(path) {
+  const r = await fetch(path); if (!r.ok) throw new Error('Bestand ontbreekt: ' + path);
+  return URL.createObjectURL(await r.blob());
+}
+function getOcr() {
+  if (ocrWorker) return Promise.resolve(ocrWorker);
+  if (ocrLoading) return ocrLoading;
+  ocrLoading = (async () => {
+    // Alle onderdelen worden via de pagina geladen, zodat de offline-cache ze levert.
+    const simd = WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11]));
+    const coreFile = simd ? 'vendor/core/tesseract-core-simd-lstm.wasm.js' : 'vendor/core/tesseract-core-lstm.wasm.js';
+    const [workerUrl, coreUrl, lang] = await Promise.all([
+      blobUrlOf('vendor/worker.min.js'), blobUrlOf(coreFile),
+      fetch('vendor/lang/eng.traineddata.gz').then((r) => { if (!r.ok) throw new Error('Taalbestand ontbreekt'); return r.arrayBuffer(); })
+    ]);
+    const w = await Tesseract.createWorker([{ code: 'eng', data: new Uint8Array(lang) }], 1, {
+      workerPath: workerUrl, corePath: coreUrl + '#.js', workerBlobURL: false, cacheMethod: 'none', gzip: true,
+      logger: (m) => ocrProgress(m)
+    });
+    ocrWorker = w; return w;
+  })();
+  ocrLoading.catch(() => (ocrLoading = null));
+  return ocrLoading;
+}
+
+function prepImage(file) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file); const img = new Image();
+    img.onload = () => {
+      // schaal naar ~1600px breed, grijswaarden en contrast versterken
+      let w = img.naturalWidth, h = img.naturalHeight;
+      const s = Math.min(1, 1800 / Math.max(w, h)) * (Math.max(w, h) < 1000 ? 1600 / Math.max(w, h) : 1);
+      w = Math.round(w * s); h = Math.round(h * s);
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      const ctx = cv.getContext('2d', { willReadFrequently: true }); ctx.drawImage(img, 0, 0, w, h);
+      const raw = document.createElement('canvas'); raw.width = w; raw.height = h; raw.getContext('2d', { willReadFrequently: true }).drawImage(img, 0, 0, w, h);
+      const id = ctx.getImageData(0, 0, w, h), p = id.data;
+      let min = 255, max = 0; const g = new Uint8ClampedArray(w * h);
+      for (let i = 0, j = 0; i < p.length; i += 4, j++) { const v = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2]; g[j] = v; if (v < min) min = v; if (v > max) max = v; }
+      const range = Math.max(1, max - min);
+      // donkere kaarten met lichte tekst omkeren zodat tekst donker op licht staat
+      let sum = 0; for (let j = 0; j < g.length; j++) sum += g[j];
+      const invert = sum / g.length < 110;
+      for (let i = 0, j = 0; i < p.length; i += 4, j++) {
+        let v = ((g[j] - min) / range) * 255; if (invert) v = 255 - v;
+        v = v < 128 ? v * 0.75 : 255 - (255 - v) * 0.75; p[i] = p[i + 1] = p[i + 2] = v;
+      }
+      ctx.putImageData(id, 0, 0);
+      URL.revokeObjectURL(url);
+      res({ canvas: cv, raw, thumb: (() => { const t = document.createElement('canvas'); t.width = 240; t.height = Math.round(240 * img.naturalHeight / img.naturalWidth); t.getContext('2d').drawImage(img, 0, 0, t.width, t.height); return t.toDataURL('image/jpeg', .7); })() });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Foto kon niet geopend worden')); };
+    img.src = url;
+  });
+}
+
+let scanTarget = null;
+function startScan(ref) {
+  if (!ref) return;
+  if (PREVIEW) { toast('Scannen werkt in de geïnstalleerde app'); return; }
+  scanTarget = ref; const i = $('#scanInput'); i.value = ''; i.click();
+}
+
+let zxingLoading = null;
+function loadZXing() {
+  if (window.ZXing) return Promise.resolve();
+  if (!zxingLoading) zxingLoading = new Promise((res, rej) => {
+    const s = document.createElement('script'); s.src = 'vendor/zxing.min.js';
+    s.onload = res; s.onerror = () => { zxingLoading = null; rej(new Error('Barcodelezer kon niet laden')); };
+    document.head.appendChild(s);
+  });
+  return zxingLoading;
+}
+const ZX_MAP = { EAN_13: 'EAN13', EAN_8: 'EAN8', UPC_A: 'UPC', CODE_128: 'CODE128', CODE_39: 'CODE39', ITF: 'ITF', QR_CODE: 'QR' };
+function decodeBarcode(cv) {
+  const w = cv.width, h = cv.height, p = cv.getContext('2d').getImageData(0, 0, w, h).data;
+  const lum = new Uint8ClampedArray(w * h);
+  for (let i = 0, j = 0; i < p.length; i += 4, j++) lum[j] = (p[i] * 299 + p[i + 1] * 587 + p[i + 2] * 114) / 1000;
+  const hints = new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  for (const Bin of [ZXing.HybridBinarizer, ZXing.GlobalHistogramBinarizer]) {
+    try {
+      const bmp = new ZXing.BinaryBitmap(new Bin(new ZXing.RGBLuminanceSource(lum, w, h)));
+      const r = new ZXing.MultiFormatReader().decode(bmp, hints);
+      return { text: r.getText(), fmt: ZX_MAP[ZXing.BarcodeFormat[r.getBarcodeFormat()]] || 'CODE128' };
+    } catch {}
+  }
+  return null;
+}
+function rotate90(cv) {
+  const o = document.createElement('canvas'); o.width = cv.height; o.height = cv.width;
+  const x = o.getContext('2d'); x.translate(o.width, 0); x.rotate(Math.PI / 2); x.drawImage(cv, 0, 0); return o;
+}
+function scaled(cv, max) {
+  const s = max / Math.max(cv.width, cv.height); if (s >= 1) return cv;
+  const o = document.createElement('canvas'); o.width = Math.round(cv.width * s); o.height = Math.round(cv.height * s);
+  o.getContext('2d').drawImage(cv, 0, 0, o.width, o.height); return o;
+}
+
+$('#scanInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0]; const ref = scanTarget; if (!file || !ref) return;
+  const el = ref.el, st = $('#scanStatus', el), msg = $('#scanMsg', el), bar = $('#scanBar', el);
+  const btn = $('[data-act="scan"]', el); btn.disabled = true;
+  st.hidden = false; msg.textContent = 'Foto voorbereiden…'; bar.style.width = '5%';
+  try {
+    const img = await prepImage(file);
+    $('#scanImg', el).src = img.thumb;
+    if (ref.getSoort && ref.getSoort() === 'klant') await scanLoyal(ref, img, msg, bar);
+    else await scanBank(ref, img, msg, bar);
+    $('#scanLbl', el).textContent = 'Opnieuw scannen';
+  } catch (err) {
+    console.error(err);
+    msg.innerHTML = '<b>Scannen lukte niet.</b> ' + esc(err.message || err); bar.style.width = '0';
+  } finally { btn.disabled = false; }
+});
+
+async function scanLoyal(ref, { raw, canvas }, msg, bar) {
+  const f = $('#cf', ref.el);
+  msg.textContent = 'Barcode zoeken…'; bar.style.width = '25%';
+  await loadZXing();
+  await new Promise((r) => setTimeout(r, 30));
+  let res = null;
+  for (const cv of [scaled(raw, 1400), rotate90(scaled(raw, 1400)), raw, canvas]) {
+    res = decodeBarcode(cv); if (res) break;
+    bar.style.width = (parseFloat(bar.style.width) + 12) + '%';
+    await new Promise((r) => setTimeout(r, 0));
+  }
+  if (res) {
+    f.lnummer.value = res.text; f.formaat.value = res.fmt === autoFormat(res.text) ? '' : res.fmt;
+    bar.style.width = '100%'; ref.update();
+    msg.innerHTML = `<b>Barcode gelezen (${FORMAT_NAME[res.fmt]}).</b> Vul de winkel in als die nog ontbreekt.`;
+    return;
+  }
+  // geen barcode gevonden: lees het nummer onder de code
+  msg.textContent = 'Geen barcode gevonden, nummer lezen…'; bar.style.width = '70%';
+  ocrProgress = (m) => { if (m.status === 'recognizing text') bar.style.width = (70 + m.progress * 30) + '%'; };
+  const w = await getOcr();
+  await w.setParameters({ tessedit_pageseg_mode: '11', tessedit_char_whitelist: '0123456789 ' });
+  const r = await w.recognize(canvas);
+  await w.setParameters({ tessedit_char_whitelist: '' });
+  const runs = (r.data.text || '').split(/\n/).map((l) => digits(l)).filter((d) => d.length >= 6 && d.length <= 24).sort((a, b) => b.length - a.length);
+  bar.style.width = '100%';
+  if (runs.length) {
+    f.lnummer.value = runs[0]; f.formaat.value = ''; ref.update();
+    msg.innerHTML = '<b>Nummer gelezen.</b> Kijk het na en kies zo nodig de soort code.';
+  } else msg.innerHTML = '<b>Niets herkend.</b> Probeer dichterbij met meer licht, of typ het nummer in.';
+}
+
+async function scanBank(ref, { canvas }, msg, bar) {
+  const el = ref.el;
+  let phase = 0;
+  ocrProgress = (m) => {
+    if (m.status === 'recognizing text') { bar.style.width = (30 + phase * 35 + m.progress * 35) + '%'; msg.textContent = phase ? 'Cijfers controleren…' : 'Tekst herkennen…'; }
+    else if (!ocrWorker) { msg.textContent = 'Herkenning opstarten…'; bar.style.width = (5 + (m.progress || 0) * 25) + '%'; }
+  };
+  const w = await getOcr();
+  await w.setParameters({ tessedit_pageseg_mode: '11', tessedit_char_whitelist: '' });
+  const r1 = await w.recognize(canvas);
+  phase = 1;
+  await w.setParameters({ tessedit_pageseg_mode: '11', tessedit_char_whitelist: '0123456789/ ' });
+  const r2 = await w.recognize(canvas);
+  await w.setParameters({ tessedit_char_whitelist: '' });
+  const res = parseCardText(r1.data.text || '', r2.data.text || '');
+  bar.style.width = '100%';
+  const f = $('#cf', el); const found = [];
+  if (res.nummer) { f.nummer.value = formatNum(res.nummer); found.push('nummer'); }
+  if (res.vervaldatum) { f.vervaldatum.value = res.vervaldatum; found.push('vervaldatum'); }
+  if (res.houder && !f.houder.value) { f.houder.value = res.houder; found.push('naam'); }
+  if (res.bank && !f.bank.value) { f.bank.value = res.bank; found.push('bank'); }
+  ref.update && ref.update();
+  if (!found.length) msg.innerHTML = '<b>Niets herkend.</b> Probeer opnieuw met meer licht, of typ de gegevens in.';
+  else if (res.nummer && !res.zeker) msg.innerHTML = `<b>Gevonden: ${found.join(', ')}.</b> Het nummer lijkt niet te kloppen; kijk het na.`;
+  else msg.innerHTML = `<b>Gevonden: ${found.join(', ')}.</b> Controleer de gegevens voor je bewaart.`;
+}
+
+/* ---------- acties ---------- */
+document.addEventListener('click', async (e) => {
+  const t = e.target.closest('[data-act],[data-klant],[data-kaart],[data-tab],[data-filter]');
+  if (!t || t.closest('#lock')) return;
+  if (t.dataset.tab) { tab = t.dataset.tab; query = ''; $('#q').value = ''; closeAllSheets(); render(); scrollTo(0, 0); return; }
+  if (t.dataset.filter) { cardFilter = t.dataset.filter; render(); return; }
+  if (t.dataset.klant) { klantDetail(t.dataset.klant); return; }
+  if (t.dataset.kaart && !t.closest('#preview')) { kaartDetail(t.dataset.kaart); return; }
+  const a = t.dataset.act, id = t.dataset.id;
+  if (a === 'newKlant') klantForm();
+  if (a === 'newKaart') kaartForm(null);
+  if (a === 'kaartFor') kaartForm(null, { klantId: id, soort: t.dataset.soort });
+  if (a === 'scan') startScan(currentFormRef());
+  if (a === 'openKlant') { closeAllSheets(); klantDetail(id); }
+  if (a === 'delKlant') {
+    const k = klantById(id), n = kaartenVan(id).length;
+    if (await confirmBox({ title: `${k.naam} verwijderen?`, text: n ? `Ook ${n} ${n === 1 ? 'gekoppelde kaart wordt' : 'gekoppelde kaarten worden'} verwijderd.` : 'Dit kan niet ongedaan worden.' })) {
+      state.klanten = state.klanten.filter((x) => x.id !== id); state.kaarten = state.kaarten.filter((x) => x.klantId !== id);
+      await save(); closeAllSheets(); render(); toast('Klant verwijderd');
+    }
+  }
+  if (a === 'delKaart') {
+    if (await confirmBox({ title: 'Kaart verwijderen?', text: 'Dit kan niet ongedaan worden.' })) {
+      state.kaarten = state.kaarten.filter((x) => x.id !== id); await save();
+      sheets[sheets.length - 1](); render(); refreshDetail(); toast('Kaart verwijderd');
+    }
+  }
+  if (a === 'demo') { loadDemo(); await save(); render(); toast('Voorbeeldgegevens geladen'); }
+  if (a === 'export') exportBackup();
+  if (a === 'import') $('#importInput').click();
+  if (a === 'changeCode') changeCode();
+  if (a === 'wipe') wipeAll();
+});
+function currentFormRef() { formRefs = formRefs.filter((r) => document.body.contains(r.el)); return formRefs[formRefs.length - 1]; }
+
+$('#addBtn').addEventListener('click', () => {
+  if (tab === 'klanten') klantForm();
+  else kaartForm(null, { soort: cardFilter === 'klant' ? 'klant' : 'bank' });
+});
+$('#q').addEventListener('input', (e) => { query = e.target.value.trim(); render(); });
+addEventListener('scroll', () => $('#top').classList.toggle('scrolled', scrollY > 4), { passive: true });
+
+function loadDemo() {
+  const y = new Date().getFullYear() % 100, m = new Date().getMonth() + 1;
+  const pad = (n) => String(n).padStart(2, '0');
+  const soon = m === 12 ? `01/${pad(y + 1)}` : `${pad(m + 1)}/${pad(y)}`;
+  const a = uid(), b = uid(), c = uid();
+  state.klanten.push(
+    { id: a, naam: 'Lotte Peeters', bedrijf: 'Bakkerij Peeters', telefoon: '+32 470 12 34 56', email: 'lotte@voorbeeld.be', adres: 'Kerkstraat 12, 9000 Gent', notities: 'Voorbeeldklant, mag je verwijderen.' },
+    { id: b, naam: 'Jonas Maes', bedrijf: '', telefoon: '+32 498 76 54 32', email: '', adres: '', notities: 'Voorbeeldklant, mag je verwijderen.' },
+    { id: c, naam: 'Sarah Claes', bedrijf: 'Claes Architecten', telefoon: '', email: 'sarah@voorbeeld.be', adres: '', notities: 'Voorbeeldklant, mag je verwijderen.' });
+  // testnummers (geen echte kaarten)
+  state.kaarten.push(
+    { id: uid(), klantId: a, nummer: '4111111111111111', vervaldatum: `08/${pad(y + 3)}`, houder: 'LOTTE PEETERS', bank: 'KBC', label: 'Zakelijke kredietkaart' },
+    { id: uid(), klantId: a, nummer: '6703444444444449', vervaldatum: soon, houder: 'LOTTE PEETERS', bank: 'Belfius', label: 'Debetkaart' },
+    { id: uid(), klantId: b, nummer: '5555555555554444', vervaldatum: `03/${pad(y - 1)}`, houder: 'JONAS MAES', bank: 'ING', label: '' },
+    { id: uid(), klantId: a, soort: 'klant', winkel: 'Delhaize', nummer: '2540123456783', formaat: '', houder: 'Lotte Peeters', kleur: '#c8102e', notities: 'Voorbeeldkaart' },
+    { id: uid(), klantId: '', soort: 'klant', winkel: 'IKEA Family', nummer: '6275980123456789', formaat: 'CODE128', houder: '', kleur: '#1f3a93', notities: 'Voorbeeldkaart' },
+    { id: uid(), klantId: c, soort: 'klant', winkel: 'Bibliotheek Gent', nummer: 'BIB-0087-3421', formaat: 'QR', houder: 'Sarah Claes', vervaldatum: `06/${pad(y + 1)}`, kleur: '#2e8540', notities: '' },
+    { id: uid(), klantId: c, nummer: '378282246310005', vervaldatum: `11/${pad(y + 2)}`, houder: 'SARAH CLAES', bank: 'BNP Paribas Fortis', label: 'Amex Business' });
+}
+
+/* ---------- back-up ---------- */
+async function exportBackup() {
+  if (PREVIEW) { toast('Back-ups werken in de geïnstalleerde app'); return; }
+  const vault = await kv('get', 'vault');
+  const name = `kaartbeheer-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  const file = new File([JSON.stringify(vault)], name, { type: 'application/json' });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Kaartbeheer back-up' }); }
+    else { const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
+    try { localStorage.setItem('kb-backup', new Date().toISOString()); } catch {} render(); toast('Back-up klaar');
+  } catch (err) { if (err.name !== 'AbortError') toast('Back-up mislukt'); }
+}
+$('#importInput').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  let vault; try { vault = JSON.parse(await f.text()); if (vault.app !== 'kaartbeheer') throw 0; } catch { toast('Dit is geen Kaartbeheer-back-up'); return; }
+  openSheet({ title: 'Back-up terugzetten', left: 'Annuleren', right: 'Terugzetten',
+    body: `<p class="hint">Geef de toegangscode die gold toen deze back-up gemaakt werd. Alle huidige gegevens op dit toestel worden vervangen.</p>
+      <div class="group"><div class="field"><label for="impCode">Code van de back-up</label><input id="impCode" type="password" inputmode="numeric" autocomplete="off"></div></div><p class="hint bad" id="impErr"></p>`,
+    onMount: (el) => setTimeout(() => $('#impCode', el).focus(), 250),
+    onRight: async (el, close) => {
+      try {
+        const r = await openVault(vault, $('#impCode', el).value);
+        key = r.k; salt = r.s; state = r.data; await save(); close(); render(); toast('Back-up teruggezet');
+      } catch { $('#impErr', el).textContent = 'Code klopt niet voor deze back-up.'; }
+    } });
+});
+
+/* ---------- code wijzigen / wissen ---------- */
+function changeCode() {
+  openSheet({ title: 'Code wijzigen', left: 'Annuleren', right: 'Bewaar',
+    body: `<div class="group">
+      <div class="field"><label for="ocode">Huidige code</label><input id="ocode" type="password" inputmode="numeric" autocomplete="off"></div>
+      <div class="field"><label for="ncode1">Nieuwe code</label><input id="ncode1" type="password" inputmode="numeric" autocomplete="off" placeholder="Minstens 4 tekens"></div>
+      <div class="field"><label for="ncode2">Herhaal nieuwe code</label><input id="ncode2" type="password" inputmode="numeric" autocomplete="off"></div></div>
+      <p class="hint bad" id="ccErr"></p>`,
+    onRight: async (el, close) => {
+      const err = $('#ccErr', el), o = $('#ocode', el).value, n1 = $('#ncode1', el).value, n2 = $('#ncode2', el).value;
+      try { await openVault(await kv('get', 'vault'), o); } catch { err.textContent = 'Huidige code klopt niet.'; return; }
+      if (n1.length < 4) { err.textContent = 'Nieuwe code moet minstens 4 tekens hebben.'; return; }
+      if (n1 !== n2) { err.textContent = 'De nieuwe codes zijn niet gelijk.'; return; }
+      salt = crypto.getRandomValues(new Uint8Array(16)); key = await deriveKey(n1, salt); await save(); close(); toast('Code gewijzigd');
+    } });
+}
+async function wipeAll() {
+  if (!(await confirmBox({ title: 'Alles wissen?', text: 'Alle klanten, kaarten en je toegangscode worden van dit toestel verwijderd. Maak eerst een back-up als je die nog nodig hebt.', ok: 'Alles wissen' }))) return;
+  await kv('del', 'vault'); key = null; salt = null; state = { klanten: [], kaarten: [] };
+  closeAllSheets(); showLock();
+}
+
+/* ---------- vergrendelen ---------- */
+let fails = 0, blockedUntil = 0, mode = 'unlock';
+async function showLock() {
+  key = null; state = { klanten: [], kaarten: [] }; closeAllSheets();
+  $('#app').hidden = true; $('#lock').hidden = false; view.innerHTML = '';
+  const vault = await kv('get', 'vault');
+  mode = vault ? 'unlock' : 'setup';
+  $('#code1').value = ''; $('#code2').value = ''; $('#lockErr').textContent = '';
+  $('#code2Wrap').hidden = mode !== 'setup';
+  $('#forgotBtn').hidden = mode !== 'unlock';
+  $('#lockTitle').textContent = mode === 'setup' ? 'Welkom bij Kaartbeheer' : 'Kaartbeheer';
+  $('#lockText').textContent = mode === 'setup'
+    ? 'Kies een toegangscode. Je gegevens worden ermee versleuteld op deze iPhone. Zonder code kan niemand ze lezen, ook jij niet: onthoud hem goed.'
+    : 'Voer je toegangscode in.';
+  $('#code1Label').textContent = mode === 'setup' ? 'Nieuwe toegangscode' : 'Toegangscode';
+  $('#lockBtn').textContent = mode === 'setup' ? 'Code instellen' : 'Ontgrendelen';
+  setTimeout(() => $('#code1').focus(), 100);
+}
+function showApp() { $('#lock').hidden = true; $('#app').hidden = false; tab = 'klanten'; render(); }
+
+$('#lockForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = $('#lockErr'), c1 = $('#code1').value;
+  if (Date.now() < blockedUntil) { err.textContent = `Te veel pogingen. Wacht ${Math.ceil((blockedUntil - Date.now()) / 1000)} seconden.`; return; }
+  if (c1.length < 4) { err.textContent = 'De code moet minstens 4 tekens hebben.'; return; }
+  $('#lockBtn').disabled = true;
+  try {
+    if (mode === 'setup') {
+      if (c1 !== $('#code2').value) { err.textContent = 'De codes zijn niet gelijk.'; return; }
+      salt = crypto.getRandomValues(new Uint8Array(16)); key = await deriveKey(c1, salt);
+      state = { klanten: [], kaarten: [] }; await save(); showApp();
+    } else {
+      try {
+        const r = await openVault(await kv('get', 'vault'), c1);
+        key = r.k; salt = r.s; state = r.data; fails = 0; showApp();
+      } catch {
+        fails++; $('#code1').value = '';
+        if (fails >= 5) { blockedUntil = Date.now() + 30000 * (fails - 4); err.textContent = 'Te veel foute pogingen. Wacht even.'; }
+        else err.textContent = 'Foute code.';
+      }
+    }
+  } finally { $('#lockBtn').disabled = false; }
+});
+$('#forgotBtn').addEventListener('click', async () => {
+  if (await confirmBox({ title: 'Code vergeten', text: 'De code kan niet hersteld worden. Je kan alles wissen en opnieuw beginnen, of later een back-up terugzetten waarvan je de code wel kent.', ok: 'Alles wissen' })) {
+    await kv('del', 'vault'); showLock();
+  }
+});
+$('#lockNow').addEventListener('click', showLock);
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) hiddenAt = Date.now();
+  else if (key && !PREVIEW && Date.now() - hiddenAt > 60000) showLock();
+});
+
+/* ---------- start ---------- */
+if (PREVIEW) { key = 'preview'; loadDemo(); $('#lockNow').hidden = true; showApp(); }
+else if (!window.isSecureContext || !crypto.subtle) {
+  $('#lockText').textContent = 'Open de app via https:// (of localhost). Versleuteling werkt niet op een onbeveiligd adres.';
+  $('#lockBtn').disabled = true;
+} else showLock();
+if (!PREVIEW && 'serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+// herkenning alvast klaarzetten na ontgrendelen zodat de eerste scan sneller gaat
+document.addEventListener('click', function warm() { if (key && !PREVIEW) { setTimeout(() => getOcr().catch(() => {}), 1500); document.removeEventListener('click', warm); } });
+</script>
+</body>
+</html>

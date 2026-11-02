@@ -1,0 +1,25 @@
+KAARTBEHEER – installeren op je iPhone
+======================================
+
+De app werkt na installatie volledig offline. Ze moet wel één keer via een
+https-adres geopend worden, zodat de iPhone ze kan bewaren.
+
+1. Zet de map online (eenmalig, gratis), bijvoorbeeld:
+   - Netlify Drop: ga op een computer naar app.netlify.com/drop en sleep de
+     uitgepakte map "kaartbeheer" in het venster. Je krijgt een https-adres.
+   - of GitHub Pages / Cloudflare Pages.
+   Er staan geen gegevens in de map: klanten en kaarten blijven op je iPhone.
+
+2. Open dat adres in Safari op je iPhone.
+3. Tik op Deel  ->  "Zet op beginscherm".
+4. Open Kaartbeheer vanaf het beginscherm en kies een toegangscode.
+   Laat de app één keer volledig laden (± 10 MB voor de scanfunctie).
+   Daarna werkt alles zonder internet, ook in vliegtuigmodus.
+
+Goed om te weten
+- Gegevens worden versleuteld (AES-256) op het toestel bewaard met je code.
+  Code vergeten = gegevens kwijt. Maak geregeld een back-up via Instellingen.
+- Scannen gebeurt op het toestel; de foto wordt niet bewaard.
+- CVC-codes worden bewust niet bewaard.
+- Gebruik de app vanaf het beginscherm: iOS kan gegevens van websites die je
+  lang niet in Safari opent opruimen, maar niet die van beginscherm-apps.

@@ -1,0 +1,16 @@
+{
+  "name": "Kaartbeheer",
+  "short_name": "Kaartbeheer",
+  "description": "Klanten en bankkaarten bijhouden, ook offline.",
+  "lang": "nl-BE",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#12342e",
+  "theme_color": "#12342e",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

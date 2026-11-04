@@ -93,10 +93,14 @@ button { cursor: pointer; }
 .lock-link { background: none; border: 0; color: inherit; opacity: .75; text-decoration: underline; padding: 4px 0; justify-self: start; }
 
 /* ---------- app ---------- */
-#app { min-height: 100%; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); }
+/* De pagina zelf scrolt niet: kop en tabbalk staan vast, alleen <main> scrolt. */
+#app {
+  position: fixed; top: 0; left: 0; right: 0; bottom: calc(-1 * var(--gap));
+  display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); background: var(--bg);
+}
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
 header.top {
-  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg);
+  flex: none; position: relative; z-index: 5; background: var(--bg);
   padding-block: 12px 10px; display: grid; gap: 10px; border-bottom: 1px solid transparent;
 }
 header.top.scrolled { border-bottom-color: var(--line); }
@@ -122,7 +126,7 @@ header.top.scrolled { border-bottom-color: var(--line); }
 .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .chip .n { font-variant-numeric: tabular-nums; opacity: .75; margin-left: 4px; }
 
-main { flex: 1; padding-block: 8px calc(96px + var(--dock) + env(safe-area-inset-bottom, 0px)); }
+main { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-block: 8px 32px; }
 .list { display: grid; gap: 10px; }
 .section-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 18px 0 8px; }
 
@@ -208,9 +212,8 @@ main { flex: 1; padding-block: 8px calc(96px + var(--dock) + env(safe-area-inset
 
 /* tabbalk */
 nav.tabs {
-  position: fixed; left: 0; right: 0; bottom: calc(-1 * var(--gap)); z-index: 6; display: grid; grid-template-columns: repeat(3, 1fr);
-  margin-bottom: 0;
-  background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: saturate(1.6) blur(18px); -webkit-backdrop-filter: saturate(1.6) blur(18px);
+  flex: none; position: relative; z-index: 6; display: grid; grid-template-columns: repeat(3, 1fr);
+  background: var(--surface);
   border-top: 1px solid var(--line);
   padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + var(--dock) + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
 }
@@ -316,18 +319,15 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
 .swatches input:focus-visible + span { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent); }
 /* instellingen: schakelaars en keuzes */
 label.setting { cursor: pointer; }
-.switch {
-  appearance: none; -webkit-appearance: none; margin: 0; flex: none; width: 51px; height: 31px; border-radius: 999px;
-  background: var(--line); position: relative; transition: background .2s; cursor: pointer;
-}
-.switch::before {
+.sw { flex: none; width: 51px; height: 31px; border-radius: 999px; background: var(--line); position: relative; transition: background .2s; }
+.sw::after {
   content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%;
   background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .2s;
 }
-.switch:checked { background: var(--ok); }
-.switch:checked::before { transform: translateX(20px); }
-.switch:disabled { opacity: .45; cursor: not-allowed; }
-@media (prefers-reduced-motion: reduce) { .switch, .switch::before { transition: none; } }
+[aria-checked="true"] > .sw { background: var(--ok); }
+[aria-checked="true"] > .sw::after { transform: translateX(20px); }
+[aria-disabled="true"] > .sw { opacity: .45; }
+@media (prefers-reduced-motion: reduce) { .sw, .sw::after { transition: none; } }
 .setting select { flex: none; border: 0; background: var(--sunken); border-radius: 8px; padding: 6px 8px; font-size: 15px; max-width: 50%; }
 .setting .text-btn { min-width: 0; flex: none; }
 .setting .text-btn.bad { color: var(--bad); }
@@ -825,7 +825,7 @@ async function renderInstellingen() {
   const upd = vault && vault.updated ? new Date(vault.updated).toLocaleString('nl-BE', { dateStyle: 'medium', timeStyle: 'short' }) : '–';
   let lastBackup = null; try { lastBackup = localStorage.getItem('kb-backup'); } catch {}
   const C = cfg(), F = C.functies, vis = zichtbareKaarten(), st = vis.map(status);
-  const sw = (path, on, extra = '') => `<input type="checkbox" class="switch" data-cfg="${path}" ${on ? 'checked' : ''} ${extra}>`;
+  const swa = (path, on, locked = false) => `role="switch" data-toggle="${path}" aria-checked="${!!on}"${locked ? ' aria-disabled="true"' : ''}`;
   const opt = (path, cur, list) => `<select data-cfg="${path}" data-num>${list.map(([v, l]) => `<option value="${v}" ${+cur === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
   const onlyCardType = (k) => F[k] && !F[k === 'bankkaarten' ? 'klantenkaarten' : 'bankkaarten'];
   const stats = [
@@ -840,15 +840,15 @@ async function renderInstellingen() {
     </div>
     <div class="section-label">Functies</div>
     <div class="group">
-      ${FUNCTIES.map(([k, l, s]) => `<label class="setting"><span class="s-main"><span>${l}</span><span class="s-sub">${s}</span></span>
-        ${sw('functies.' + k, F[k], onlyCardType(k) ? 'disabled title="Minstens één soort kaart moet aan staan"' : '')}</label>`).join('')}
+      ${FUNCTIES.map(([k, l, s]) => `<button type="button" class="setting" ${swa('functies.' + k, F[k], onlyCardType(k))}><span class="s-main"><span>${l}</span><span class="s-sub">${s}</span></span>
+        <span class="sw" aria-hidden="true"></span></button>`).join('')}
     </div>
     <p class="hint" style="margin-top:8px">${hiddenCount ? `${hiddenCount} ${hiddenCount === 1 ? 'item is' : 'items zijn'} verborgen omdat de functie uit staat. Ze blijven bewaard en komen terug als je de functie weer aanzet.` : 'Uitgeschakelde functies verdwijnen uit de app. Bestaande gegevens blijven bewaard.'}</p>
     ${F.klanten ? `
     <div class="section-label">Klantgegevens</div>
     <div class="group">
       <div class="setting"><span class="s-main"><span>Naam</span><span class="s-sub">Altijd verplicht</span></span><span class="pill ok">Vast</span></div>
-      ${KLANT_VELDEN.map(([k, l]) => `<label class="setting"><span class="s-main"><span>${l}</span></span>${sw('klantVelden.' + k, C.klantVelden[k])}</label>`).join('')}
+      ${KLANT_VELDEN.map(([k, l]) => `<button type="button" class="setting" ${swa('klantVelden.' + k, C.klantVelden[k])}><span class="s-main"><span>${l}</span></span><span class="sw" aria-hidden="true"></span></button>`).join('')}
       ${C.extraVelden.map((v) => `<div class="setting"><span class="s-main"><span>${esc(v.label)}</span><span class="s-sub">Eigen veld · ${esc((VELD_TYPES.find((t) => t[0] === v.type) || VELD_TYPES[0])[1])}</span></span>
         <button class="text-btn bad" data-act="delVeld" data-id="${esc(v.id)}">Verwijder</button></div>`).join('')}
       <button class="setting" data-act="addVeld"><span class="s-main"><span style="color:var(--accent);font-weight:650">+ Eigen veld toevoegen</span><span class="s-sub">Bijvoorbeeld klantnummer, btw-nummer of geboortedatum</span></span></button>
@@ -856,9 +856,9 @@ async function renderInstellingen() {
     ${F.bankkaarten ? `
     <div class="section-label">Bankkaarten</div>
     <div class="group">
-      <label class="setting"><span class="s-main"><span>Veld ‘Bank’</span></span>${sw('bankVelden.bank', C.bankVelden.bank)}</label>
-      <label class="setting"><span class="s-main"><span>Veld ‘Omschrijving’</span></span>${sw('bankVelden.label', C.bankVelden.label)}</label>
-      <label class="setting"><span class="s-main"><span>Nummercontrole</span><span class="s-sub">Kaartnummer nakijken met het controlecijfer</span></span>${sw('bankVelden.controle', C.bankVelden.controle)}</label>
+      <button type="button" class="setting" ${swa('bankVelden.bank', C.bankVelden.bank)}><span class="s-main"><span>Veld ‘Bank’</span></span><span class="sw" aria-hidden="true"></span></button>
+      <button type="button" class="setting" ${swa('bankVelden.label', C.bankVelden.label)}><span class="s-main"><span>Veld ‘Omschrijving’</span></span><span class="sw" aria-hidden="true"></span></button>
+      <button type="button" class="setting" ${swa('bankVelden.controle', C.bankVelden.controle)}><span class="s-main"><span>Nummercontrole</span><span class="s-sub">Kaartnummer nakijken met het controlecijfer</span></span><span class="sw" aria-hidden="true"></span></button>
     </div>` : ''}
     <div class="section-label">Vervaldatum</div>
     <div class="group">
@@ -885,19 +885,27 @@ async function renderInstellingen() {
     <p class="hint" style="margin-top:16px">Gegevens blijven op deze iPhone en worden versleuteld bewaard. Er wordt niets via internet verstuurd.${F.bankkaarten ? ' Beveiligingscodes (CVC) worden bewust niet bewaard.' : ''}</p>`;
 }
 
-// Schakelaars en keuzes in Instellingen
-document.addEventListener('change', async (e) => {
-  const t = e.target.closest('[data-cfg]');
-  if (!t || !key) return;
-  const path = t.dataset.cfg;
-  const value = t.type === 'checkbox' ? t.checked : 'num' in t.dataset ? +t.value : t.value;
+// Schakelaars (knoppen met role=switch) en keuzelijsten in Instellingen
+async function applyCfg(path, value) {
   if (path === 'functies.bankkaarten' || path === 'functies.klantenkaarten') {
     const other = path.endsWith('bankkaarten') ? 'klantenkaarten' : 'bankkaarten';
-    if (!value && !cfg().functies[other]) { t.checked = true; toast('Minstens één soort kaart moet aan staan'); return; }
+    if (!value && !cfg().functies[other]) { toast('Minstens één soort kaart moet aan staan'); return; }
   }
   setCfg(path, value);
   await save(); render();
   if (path.startsWith('functies.')) toast(value ? 'Functie aangezet' : 'Functie uitgezet');
+}
+async function toggleCfg(btn) {
+  if (!key) return;
+  if (btn.getAttribute('aria-disabled') === 'true') { toast('Minstens één soort kaart moet aan staan'); return; }
+  const value = btn.getAttribute('aria-checked') !== 'true';
+  btn.setAttribute('aria-checked', String(value)); // meteen tonen, ook al wordt er nog bewaard
+  await applyCfg(btn.dataset.toggle, value);
+}
+document.addEventListener('change', (e) => {
+  const t = e.target.closest('select[data-cfg]');
+  if (!t || !key) return;
+  applyCfg(t.dataset.cfg, 'num' in t.dataset ? +t.value : t.value);
 });
 
 function addVeld() {
@@ -1428,9 +1436,10 @@ async function scanBank(ref, { canvas }, msg, bar) {
 
 /* ---------- acties ---------- */
 document.addEventListener('click', async (e) => {
-  const t = e.target.closest('[data-act],[data-klant],[data-kaart],[data-tab],[data-filter]');
+  const t = e.target.closest('[data-act],[data-klant],[data-kaart],[data-tab],[data-filter],[data-toggle]');
   if (!t || t.closest('#lock')) return;
-  if (t.dataset.tab) { tab = t.dataset.tab; query = ''; $('#q').value = ''; closeAllSheets(); render(); scrollTo(0, 0); return; }
+  if (t.dataset.toggle) { toggleCfg(t); return; }
+  if (t.dataset.tab) { tab = t.dataset.tab; query = ''; $('#q').value = ''; closeAllSheets(); render(); view.scrollTop = 0; return; }
   if (t.dataset.filter) { cardFilter = t.dataset.filter; render(); return; }
   if (t.dataset.klant) { klantDetail(t.dataset.klant); return; }
   if (t.dataset.kaart && !t.closest('#preview')) { kaartDetail(t.dataset.kaart); return; }
@@ -1468,7 +1477,7 @@ $('#addBtn').addEventListener('click', () => {
   else kaartForm(null, { soort: cardFilter === 'klant' || cardFilter === 'bank' ? cardFilter : '' });
 });
 $('#q').addEventListener('input', (e) => { query = e.target.value.trim(); render(); });
-addEventListener('scroll', () => $('#top').classList.toggle('scrolled', scrollY > 4), { passive: true });
+view.addEventListener('scroll', () => $('#top').classList.toggle('scrolled', view.scrollTop > 4), { passive: true });
 
 function loadDemo() {
   const y = new Date().getFullYear() % 100, m = new Date().getMonth() + 1;

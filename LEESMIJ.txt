@@ -4,10 +4,11 @@ KAARTBEHEER – installeren op je iPhone
 De app werkt na installatie volledig offline. Ze moet wel één keer via een
 https-adres geopend worden, zodat de iPhone ze kan bewaren.
 
-1. Zet de map online (eenmalig, gratis), bijvoorbeeld:
-   - Netlify Drop: ga op een computer naar app.netlify.com/drop en sleep de
-     uitgepakte map "kaartbeheer" in het venster. Je krijgt een https-adres.
-   - of GitHub Pages / Cloudflare Pages.
+1. De app staat online op GitHub Pages:
+     https://rudydeconinckai.github.io/cards/
+   Elke wijziging op de branch main wordt automatisch opnieuw gepubliceerd.
+   (Zelf ergens anders hosten kan ook, bv. Netlify Drop of Cloudflare Pages.
+   Toont die host een balk onderaan, zet dan --dock in index.html op 56px.)
    Er staan geen gegevens in de map: klanten en kaarten blijven op je iPhone.
 
 2. Open dat adres in Safari op je iPhone.

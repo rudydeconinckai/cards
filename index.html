@@ -117,7 +117,7 @@ header.top.scrolled { border-bottom-color: var(--line); }
 .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .chip .n { font-variant-numeric: tabular-nums; opacity: .75; margin-left: 4px; }
 
-main { flex: 1; padding-block: 8px calc(96px + var(--dock) + env(safe-area-inset-bottom, 0px)); }
+main { flex: 1; padding-block: 8px calc(160px + var(--dock) + env(safe-area-inset-bottom, 0px)); }
 .list { display: grid; gap: 10px; }
 .section-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 18px 0 8px; }
 
@@ -199,7 +199,7 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
 .sheet {
   width: 100%; max-width: 640px; max-height: calc(100% - env(safe-area-inset-top, 0px) - 12px); overflow: auto; background: var(--bg);
   border-radius: 18px 18px 0 0; animation: up .22s ease-out; -webkit-overflow-scrolling: touch;
-  padding-bottom: calc(24px + var(--dock) + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column;
 }
 @keyframes up { from { transform: translateY(40px); opacity: .3; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
@@ -207,10 +207,30 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
   position: sticky; top: 0; z-index: 2; background: var(--bg); display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding-block: 10px; border-bottom: 1px solid var(--line);
 }
+.sheet-head { padding-block: 14px; }
+.sheet-head::before { content: ""; position: absolute; top: 5px; left: 50%; transform: translateX(-50%); width: 36px; height: 5px; border-radius: 99px; background: var(--line); }
 .sheet-head h2 { margin: 0; font: 700 17px var(--display); text-align: center; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .text-btn { background: none; border: 0; color: var(--accent); font-weight: 600; padding: 8px 4px; min-width: 72px; }
 .text-btn.right { text-align: right; font-weight: 700; }
 .text-btn[disabled] { opacity: .4; }
+.sheet-body { flex: 1; }
+/* knoppen onderaan het blad, binnen bereik van de duim */
+.sheet-foot {
+  position: sticky; bottom: 0; z-index: 2; display: flex; gap: 10px; background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid var(--line);
+  padding-top: 10px; padding-bottom: calc(10px + var(--dock) + env(safe-area-inset-bottom, 0px));
+}
+.sheet-foot .btn { flex: 1; }
+/* zwevende knoppen boven de tabbalk */
+.fabs {
+  position: fixed; left: 0; right: 0; z-index: 7; pointer-events: none; display: flex; justify-content: space-between; align-items: flex-end;
+  bottom: calc(76px + var(--dock) + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.fabs .icon-btn { pointer-events: auto; box-shadow: var(--shadow); }
+.fabs #addBtn { width: 58px; height: 58px; margin-left: auto; }
+.fabs #addBtn svg { width: 26px; height: 26px; }
+.fabs #lockNow { width: 46px; height: 46px; background: var(--surface); }
 .sheet-body { padding-block: 16px; display: grid; gap: 18px; }
 
 .group { background: var(--surface); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
@@ -309,7 +329,7 @@ label.setting { cursor: pointer; }
 .field-row.single { grid-template-columns: 1fr; }
 .field-row.single .field:first-child { border-right: 0; }
 #toast {
-  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(88px + var(--dock) + env(safe-area-inset-bottom, 0px)); z-index: 40;
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(148px + var(--dock) + env(safe-area-inset-bottom, 0px)); z-index: 40;
   background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 600; font-size: 15px;
   max-width: calc(100% - 32px); box-shadow: var(--shadow);
 }
@@ -346,14 +366,6 @@ label.setting { cursor: pointer; }
   <header class="top gutter" id="top">
     <div class="top-row">
       <h1 id="viewTitle">Klanten</h1>
-      <div style="display:flex;gap:8px">
-        <button class="icon-btn" id="lockNow" aria-label="Vergrendelen" title="Vergrendelen">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
-        </button>
-        <button class="icon-btn primary" id="addBtn" aria-label="Toevoegen" title="Toevoegen">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        </button>
-      </div>
     </div>
     <div class="search" id="searchWrap">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -363,6 +375,15 @@ label.setting { cursor: pointer; }
   </header>
 
   <main class="gutter" id="view"></main>
+
+  <div class="fabs">
+        <button class="icon-btn" id="lockNow" aria-label="Vergrendelen" title="Vergrendelen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        </button>
+        <button class="icon-btn primary" id="addBtn" aria-label="Toevoegen" title="Toevoegen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+  </div>
 
   <nav class="tabs" aria-label="Hoofdmenu">
     <button data-tab="klanten" aria-current="page" hidden>
@@ -645,9 +666,10 @@ function openSheet({ title, left = 'Sluiten', right = '', onRight, body, onMount
   const scrim = document.createElement('div');
   scrim.className = 'scrim';
   scrim.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}">
-    <div class="sheet-head gutter"><button class="text-btn" data-close>${esc(left)}</button><h2>${esc(title)}</h2>
-    ${right ? `<button class="text-btn right" data-right>${esc(right)}</button>` : '<span style="min-width:72px"></span>'}</div>
-    <div class="sheet-body gutter">${body}</div></div>`;
+    <div class="sheet-head gutter"><h2>${esc(title)}</h2></div>
+    <div class="sheet-body gutter">${body}</div>
+    <div class="sheet-foot gutter"><button class="btn secondary" data-close>${esc(left)}</button>
+    ${right ? `<button class="btn" data-right>${esc(right)}</button>` : ''}</div></div>`;
   const close = () => { scrim.remove(); sheets.splice(sheets.indexOf(close), 1); };
   scrim.addEventListener('click', (e) => { if (e.target === scrim || e.target.closest('[data-close]')) close(); });
   if (onRight) $('[data-right]', scrim).addEventListener('click', () => onRight(scrim, close));

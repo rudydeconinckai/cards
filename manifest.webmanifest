@@ -1,7 +1,7 @@
 {
   "name": "Kaartbeheer",
   "short_name": "Kaartbeheer",
-  "description": "Klanten en bankkaarten bijhouden, ook offline.",
+  "description": "Klantenkaarten (en desgewenst klanten en bankkaarten) bijhouden, ook offline.",
   "lang": "nl-BE",
   "start_url": "./index.html",
   "scope": "./",

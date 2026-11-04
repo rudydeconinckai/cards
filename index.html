@@ -289,6 +289,23 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
 .swatches span { position: absolute; inset: 0; border-radius: inherit; }
 .swatches input:checked + span { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--ink); }
 .swatches input:focus-visible + span { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent); }
+/* instellingen: schakelaars en keuzes */
+label.setting { cursor: pointer; }
+.switch {
+  appearance: none; -webkit-appearance: none; margin: 0; flex: none; width: 51px; height: 31px; border-radius: 999px;
+  background: var(--line); position: relative; transition: background .2s; cursor: pointer;
+}
+.switch::before {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .2s;
+}
+.switch:checked { background: var(--ok); }
+.switch:checked::before { transform: translateX(20px); }
+.switch:disabled { opacity: .45; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .switch, .switch::before { transition: none; } }
+.setting select { flex: none; border: 0; background: var(--sunken); border-radius: 8px; padding: 6px 8px; font-size: 15px; max-width: 50%; }
+.setting .text-btn { min-width: 0; flex: none; }
+.setting .text-btn.bad { color: var(--bad); }
 .field-row.single { grid-template-columns: 1fr; }
 .field-row.single .field:first-child { border-right: 0; }
 #toast {
@@ -348,7 +365,7 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
   <main class="gutter" id="view"></main>
 
   <nav class="tabs" aria-label="Hoofdmenu">
-    <button data-tab="klanten" aria-current="page">
+    <button data-tab="klanten" aria-current="page" hidden>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.2A6.5 6.5 0 0 1 21.5 20"/></svg>
       Klanten
     </button>
@@ -417,6 +434,59 @@ async function deriveKey(code, salt) {
 let key = null, salt = null;
 let state = { klanten: [], kaarten: [] };
 
+/* ---------- configuratie (welke functies staan aan) ----------
+   Wordt mee versleuteld in de kluis en zit dus ook in back-ups.
+   Standaard staan alleen klantenkaarten aan. */
+const DEFAULT_CONFIG = {
+  functies: { klantenkaarten: true, bankkaarten: false, klanten: false, scannen: true },
+  klantVelden: { bedrijf: true, telefoon: true, email: true, adres: true, notities: true },
+  extraVelden: [], // eigen klantvelden: { id, label, type: 'text' | 'number' | 'date' | 'textarea' }
+  bankVelden: { bank: true, label: true, controle: true },
+  waarschuwDagen: 90, // ‘verloopt binnenkort’ = binnen zoveel dagen
+  vergrendelMin: 1 // automatisch vergrendelen na zoveel minuten in de achtergrond
+};
+const KLANT_VELDEN = [
+  ['bedrijf', 'Bedrijf', 'Optioneel'], ['telefoon', 'Telefoon', 'Telefoonnummer'], ['email', 'E-mail', 'E-mailadres'],
+  ['adres', 'Adres', 'Straat, postcode en gemeente'], ['notities', 'Notities', 'Vrije notities']
+];
+const VELD_TYPES = [['text', 'Tekst'], ['number', 'Getal'], ['date', 'Datum'], ['textarea', 'Lange tekst']];
+const FUNCTIES = [
+  ['klantenkaarten', 'Klantenkaarten', 'Winkel- en lidkaarten met barcode of QR-code'],
+  ['bankkaarten', 'Bankkaarten', 'Debet- en kredietkaarten met nummercontrole en vervaldatum'],
+  ['klanten', 'Klanten', 'Klantenbestand met eigen velden; kaarten koppelen aan een klant'],
+  ['scannen', 'Scannen met camera', 'Barcodes en kaartgegevens herkennen op het toestel']
+];
+function cfg() {
+  const c = state.config || {};
+  return {
+    ...DEFAULT_CONFIG, ...c,
+    functies: { ...DEFAULT_CONFIG.functies, ...c.functies },
+    klantVelden: { ...DEFAULT_CONFIG.klantVelden, ...c.klantVelden },
+    bankVelden: { ...DEFAULT_CONFIG.bankVelden, ...c.bankVelden },
+    extraVelden: Array.isArray(c.extraVelden) ? c.extraVelden : []
+  };
+}
+function setCfg(path, value) {
+  const c = cfg(), parts = path.split('.');
+  let o = c; for (const p of parts.slice(0, -1)) o = o[p];
+  o[parts[parts.length - 1]] = value;
+  state.config = c;
+}
+// Oudere kluizen hebben nog geen configuratie: zet aan wat al gebruikt werd, zodat er niets verdwijnt.
+function migrate(s) {
+  s = s && typeof s === 'object' ? s : {};
+  s.klanten = Array.isArray(s.klanten) ? s.klanten : [];
+  s.kaarten = Array.isArray(s.kaarten) ? s.kaarten : [];
+  if (!s.config) {
+    const c = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+    if (s.klanten.length) c.functies.klanten = true;
+    if (s.kaarten.some((k) => k.soort !== 'klant')) c.functies.bankkaarten = true;
+    s.config = c;
+  }
+  return s;
+}
+const freshState = () => ({ klanten: [], kaarten: [], config: JSON.parse(JSON.stringify(DEFAULT_CONFIG)) });
+
 async function sealVault(k, s, data) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, enc.encode(JSON.stringify(data))));
@@ -478,18 +548,21 @@ function normExp(s) {
   if (d.length === 6) return d.slice(0, 2) + '/' + d.slice(4);
   return s;
 }
-const SOON_DAYS = 90; // ‘binnenkort’ = binnen 3 maanden
 function status(card) {
   const d = parseExp(card.vervaldatum);
   if (!d) return { key: 'none', label: '' };
   const days = Math.ceil((d - new Date()) / 864e5);
   if (days < 0) return { key: 'bad', label: 'Vervallen', days };
-  if (days <= SOON_DAYS) return { key: 'warn', label: days <= 31 ? 'Verloopt deze maand' : 'Verloopt binnenkort', days };
+  if (days <= cfg().waarschuwDagen) return { key: 'warn', label: days <= 31 ? 'Verloopt deze maand' : 'Verloopt binnenkort', days };
   return { key: 'ok', label: 'Geldig', days };
 }
 const initials = (name) => (name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 const klantById = (id) => state.klanten.find((k) => k.id === id);
-const kaartenVan = (id) => state.kaarten.filter((c) => c.klantId === id);
+// Kaarten van een uitgeschakelde soort blijven bewaard, maar worden niet getoond.
+const isVisible = (c) => { const F = cfg().functies; return c.soort === 'klant' ? F.klantenkaarten : F.bankkaarten; };
+const zichtbareKaarten = () => state.kaarten.filter(isVisible);
+const kaartenVan = (id) => state.kaarten.filter((c) => c.klantId === id && isVisible(c));
+const alleKaartenVan = (id) => state.kaarten.filter((c) => c.klantId === id);
 const byName = (a, b) => (a.naam || '').localeCompare(b.naam || '', 'nl', { sensitivity: 'base' });
 const byExp = (a, b) => (parseExp(a.vervaldatum) || 8.64e15) - (parseExp(b.vervaldatum) || 8.64e15);
 
@@ -588,7 +661,12 @@ const closeAllSheets = () => [...sheets].reverse().forEach((c) => c());
 
 /* ---------- weergaven ---------- */
 function render() {
-  $$('nav.tabs button').forEach((b) => b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'));
+  const F = cfg().functies;
+  if (tab === 'klanten' && !F.klanten) tab = 'kaarten';
+  const navBtns = $$('nav.tabs button');
+  navBtns.forEach((b) => { if (b.dataset.tab === 'klanten') b.hidden = !F.klanten; });
+  $('nav.tabs').style.gridTemplateColumns = `repeat(${navBtns.filter((b) => !b.hidden).length}, 1fr)`;
+  navBtns.forEach((b) => b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'));
   $('#viewTitle').textContent = { klanten: 'Klanten', kaarten: 'Kaarten', instellingen: 'Instellingen' }[tab];
   $('#searchWrap').hidden = tab === 'instellingen';
   $('#addBtn').hidden = tab === 'instellingen';
@@ -604,7 +682,8 @@ function klantRow(k) {
   const cards = kaartenVan(k.id);
   const st = cards.map(status);
   const bad = st.filter((s) => s.key === 'bad').length, warn = st.filter((s) => s.key === 'warn').length;
-  const sub = [k.bedrijf, k.telefoon || k.email].filter(Boolean).join(' · ') || 'Geen contactgegevens';
+  const V = cfg().klantVelden;
+  const sub = [V.bedrijf && k.bedrijf, (V.telefoon && k.telefoon) || (V.email && k.email)].filter(Boolean).join(' · ') || 'Geen contactgegevens';
   return `<button class="row" data-klant="${k.id}">
     <span class="avatar" aria-hidden="true">${esc(initials(k.naam))}</span>
     <span class="row-main"><span class="row-title">${esc(k.naam)}</span><span class="row-sub">${esc(sub)}</span></span>
@@ -617,7 +696,7 @@ function klantRow(k) {
 
 function renderKlanten() {
   const list = [...state.klanten].sort(byName).filter((k) =>
-    matches([k.naam, k.bedrijf, k.email, k.telefoon, k.adres, k.notities, ...kaartenVan(k.id).map((c) => isLoyal(c) ? `${c.winkel} ${c.nummer}` : c.bank + ' ' + digits(c.nummer).slice(-4))].join(' ')));
+    matches([k.naam, k.bedrijf, k.email, k.telefoon, k.adres, k.notities, ...Object.values(k.extra || {}), ...kaartenVan(k.id).map((c) => isLoyal(c) ? `${c.winkel} ${c.nummer}` : c.bank + ' ' + digits(c.nummer).slice(-4))].join(' ')));
   if (!state.klanten.length) {
     view.innerHTML = `<div class="empty">
       <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/></svg>
@@ -651,15 +730,21 @@ function pcard(c, { reveal = false, tag = 'div' } = {}) {
 }
 function cardItem(c, showKlant = true) {
   const st = status(c), k = klantById(c.klantId);
+  const who = !showKlant ? (isLoyal(c) ? 'Klantenkaart' : c.label || '')
+    : cfg().functies.klanten ? (k ? k.naam : isLoyal(c) ? 'Eigen kaart' : 'Zonder klant')
+    : isLoyal(c) ? (c.houder || '') : (c.label || c.houder || '');
   return `<div class="card-item">${pcard(c, { tag: 'button' })}
-    <div class="card-meta"><span>${showKlant ? esc(k ? k.naam : isLoyal(c) ? 'Eigen kaart' : 'Zonder klant') : esc(isLoyal(c) ? 'Klantenkaart' : c.label || '')}</span>
+    <div class="card-meta"><span>${esc(who)}</span>
     ${st.label ? `<span class="pill ${st.key}">${st.label}</span>` : ''}</div></div>`;
 }
 
 function renderKaarten() {
-  const all = state.kaarten;
+  const F = cfg().functies, both = F.bankkaarten && F.klantenkaarten;
+  const all = zichtbareKaarten();
   const counts = { alle: all.length, bank: all.filter((c) => !isLoyal(c)).length, klant: all.filter(isLoyal).length, binnenkort: all.filter((c) => status(c).key === 'warn').length, vervallen: all.filter((c) => status(c).key === 'bad').length };
-  $('#filters').innerHTML = [['alle', 'Alle'], ['bank', 'Bankkaarten'], ['klant', 'Klantenkaarten'], ['binnenkort', 'Verloopt binnenkort'], ['vervallen', 'Vervallen']]
+  const chips = [['alle', 'Alle'], ...(both ? [['bank', 'Bankkaarten'], ['klant', 'Klantenkaarten']] : []), ['binnenkort', 'Verloopt binnenkort'], ['vervallen', 'Vervallen']];
+  if (!chips.some(([v]) => v === cardFilter)) cardFilter = 'alle';
+  $('#filters').innerHTML = chips
     .map(([v, l]) => `<button class="chip" data-filter="${v}" aria-pressed="${cardFilter === v}">${l}<span class="n">${counts[v]}</span></button>`).join('');
   let list = [...all].sort(byExp);
   if (cardFilter === 'bank') list = list.filter((c) => !isLoyal(c));
@@ -670,8 +755,9 @@ function renderKaarten() {
   if (!all.length) {
     view.innerHTML = `<div class="empty">
       <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19M6 15h4"/></svg>
-      <h2>Nog geen kaarten</h2><p>Voeg een bankkaart of een klantenkaart toe. Scan ze met de camera of typ de gegevens in.</p>
-      <button class="btn" data-act="newKaart">Kaart toevoegen</button></div>`;
+      <h2>Nog geen kaarten</h2><p>Voeg ${both ? 'een bankkaart of een klantenkaart' : F.bankkaarten ? 'een bankkaart' : 'een klantenkaart'} toe. ${F.scannen ? 'Scan ze met de camera of typ de gegevens in.' : 'Typ de gegevens in.'}</p>
+      <button class="btn" data-act="newKaart">Kaart toevoegen</button>
+      ${!F.klanten && !state.kaarten.length ? '<button class="btn secondary" data-act="demo">Voorbeeldgegevens laden</button>' : ''}</div>`;
     return;
   }
   view.innerHTML = list.length ? `<div class="card-grid" style="margin-top:8px">${list.map((c) => cardItem(c)).join('')}</div>`
@@ -682,12 +768,46 @@ async function renderInstellingen() {
   const vault = await kv('get', 'vault');
   const upd = vault && vault.updated ? new Date(vault.updated).toLocaleString('nl-BE', { dateStyle: 'medium', timeStyle: 'short' }) : '–';
   let lastBackup = null; try { lastBackup = localStorage.getItem('kb-backup'); } catch {}
-  const st = state.kaarten.map(status);
+  const C = cfg(), F = C.functies, vis = zichtbareKaarten(), st = vis.map(status);
+  const sw = (path, on, extra = '') => `<input type="checkbox" class="switch" data-cfg="${path}" ${on ? 'checked' : ''} ${extra}>`;
+  const opt = (path, cur, list) => `<select data-cfg="${path}" data-num>${list.map(([v, l]) => `<option value="${v}" ${+cur === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+  const onlyCardType = (k) => F[k] && !F[k === 'bankkaarten' ? 'klantenkaarten' : 'bankkaarten'];
+  const stats = [
+    F.klanten && [state.klanten.length, 'klanten'],
+    F.klantenkaarten && F.bankkaarten ? [vis.length, 'kaarten'] : [vis.length, F.bankkaarten ? 'bankkaarten' : 'klantenkaarten'],
+    [st.filter((s) => s.key === 'warn' || s.key === 'bad').length, 'aandacht nodig', 'var(--warn)']
+  ].filter(Boolean);
+  const hiddenCount = state.kaarten.length - vis.length + (F.klanten ? 0 : state.klanten.length);
   view.innerHTML = `
-    <div class="stats" style="margin-top:8px">
-      <div class="stat"><b>${state.klanten.length}</b><span>klanten</span></div>
-      <div class="stat"><b>${state.kaarten.length}</b><span>kaarten</span></div>
-      <div class="stat"><b style="color:var(--warn)">${st.filter((s) => s.key === 'warn' || s.key === 'bad').length}</b><span>aandacht nodig</span></div>
+    <div class="stats" style="margin-top:8px;grid-template-columns:repeat(${stats.length},1fr)">
+      ${stats.map(([n, l, col]) => `<div class="stat"><b${col ? ` style="color:${col}"` : ''}>${n}</b><span>${l}</span></div>`).join('')}
+    </div>
+    <div class="section-label">Functies</div>
+    <div class="group">
+      ${FUNCTIES.map(([k, l, s]) => `<label class="setting"><span class="s-main"><span>${l}</span><span class="s-sub">${s}</span></span>
+        ${sw('functies.' + k, F[k], onlyCardType(k) ? 'disabled title="Minstens één soort kaart moet aan staan"' : '')}</label>`).join('')}
+    </div>
+    <p class="hint" style="margin-top:8px">${hiddenCount ? `${hiddenCount} ${hiddenCount === 1 ? 'item is' : 'items zijn'} verborgen omdat de functie uit staat. Ze blijven bewaard en komen terug als je de functie weer aanzet.` : 'Uitgeschakelde functies verdwijnen uit de app. Bestaande gegevens blijven bewaard.'}</p>
+    ${F.klanten ? `
+    <div class="section-label">Klantgegevens</div>
+    <div class="group">
+      <div class="setting"><span class="s-main"><span>Naam</span><span class="s-sub">Altijd verplicht</span></span><span class="pill ok">Vast</span></div>
+      ${KLANT_VELDEN.map(([k, l]) => `<label class="setting"><span class="s-main"><span>${l}</span></span>${sw('klantVelden.' + k, C.klantVelden[k])}</label>`).join('')}
+      ${C.extraVelden.map((v) => `<div class="setting"><span class="s-main"><span>${esc(v.label)}</span><span class="s-sub">Eigen veld · ${esc((VELD_TYPES.find((t) => t[0] === v.type) || VELD_TYPES[0])[1])}</span></span>
+        <button class="text-btn bad" data-act="delVeld" data-id="${esc(v.id)}">Verwijder</button></div>`).join('')}
+      <button class="setting" data-act="addVeld"><span class="s-main"><span style="color:var(--accent);font-weight:650">+ Eigen veld toevoegen</span><span class="s-sub">Bijvoorbeeld klantnummer, btw-nummer of geboortedatum</span></span></button>
+    </div>` : ''}
+    ${F.bankkaarten ? `
+    <div class="section-label">Bankkaarten</div>
+    <div class="group">
+      <label class="setting"><span class="s-main"><span>Veld ‘Bank’</span></span>${sw('bankVelden.bank', C.bankVelden.bank)}</label>
+      <label class="setting"><span class="s-main"><span>Veld ‘Omschrijving’</span></span>${sw('bankVelden.label', C.bankVelden.label)}</label>
+      <label class="setting"><span class="s-main"><span>Nummercontrole</span><span class="s-sub">Kaartnummer nakijken met het controlecijfer</span></span>${sw('bankVelden.controle', C.bankVelden.controle)}</label>
+    </div>` : ''}
+    <div class="section-label">Vervaldatum</div>
+    <div class="group">
+      <label class="setting"><span class="s-main"><span>Waarschuwen vanaf</span><span class="s-sub">Toont ‘Verloopt binnenkort’</span></span>
+        ${opt('waarschuwDagen', C.waarschuwDagen, [[30, '30 dagen'], [60, '60 dagen'], [90, '90 dagen'], [180, '6 maanden']])}</label>
     </div>
     <div class="section-label">Back-up</div>
     <div class="group">
@@ -697,36 +817,97 @@ async function renderInstellingen() {
     <div class="section-label">Beveiliging</div>
     <div class="group">
       <button class="setting" data-act="changeCode"><span class="s-main"><span>Toegangscode wijzigen</span></span>›</button>
-      <div class="setting"><span class="s-main"><span>Automatisch vergrendelen</span><span class="s-sub">Na 1 minuut in de achtergrond</span></span><span class="pill ok">Aan</span></div>
+      <label class="setting"><span class="s-main"><span>Automatisch vergrendelen</span><span class="s-sub">Als de app in de achtergrond staat</span></span>
+        ${opt('vergrendelMin', C.vergrendelMin, [[0, 'Meteen'], [1, 'Na 1 minuut'], [5, 'Na 5 minuten'], [15, 'Na 15 minuten']])}</label>
     </div>
     <div class="section-label">Gegevens</div>
     <div class="group">
       <div class="setting"><span class="s-main"><span>Laatst opgeslagen</span><span class="s-sub">${esc(upd)} · alleen op dit toestel</span></span></div>
       <button class="setting danger" data-act="wipe"><span class="s-main"><span>Alles wissen</span><span class="s-sub">Verwijdert alle klanten, kaarten en de code</span></span></button>
     </div>
-    <p class="hint" style="margin-top:16px">Gegevens blijven op deze iPhone en worden versleuteld bewaard. Er wordt niets via internet verstuurd. Beveiligingscodes (CVC) worden bewust niet bewaard.</p>`;
+    <p class="hint" style="margin-top:16px">Gegevens blijven op deze iPhone en worden versleuteld bewaard. Er wordt niets via internet verstuurd.${F.bankkaarten ? ' Beveiligingscodes (CVC) worden bewust niet bewaard.' : ''}</p>`;
+}
+
+// Schakelaars en keuzes in Instellingen
+document.addEventListener('change', async (e) => {
+  const t = e.target.closest('[data-cfg]');
+  if (!t || !key) return;
+  const path = t.dataset.cfg;
+  const value = t.type === 'checkbox' ? t.checked : 'num' in t.dataset ? +t.value : t.value;
+  if (path === 'functies.bankkaarten' || path === 'functies.klantenkaarten') {
+    const other = path.endsWith('bankkaarten') ? 'klantenkaarten' : 'bankkaarten';
+    if (!value && !cfg().functies[other]) { t.checked = true; toast('Minstens één soort kaart moet aan staan'); return; }
+  }
+  setCfg(path, value);
+  await save(); render();
+  if (path.startsWith('functies.')) toast(value ? 'Functie aangezet' : 'Functie uitgezet');
+});
+
+function addVeld() {
+  openSheet({ title: 'Eigen veld', left: 'Annuleren', right: 'Voeg toe',
+    body: `<div class="group">
+      <div class="field"><label for="vLabel">Naam van het veld</label><input id="vLabel" maxlength="40" placeholder="Klantnummer" autocapitalize="sentences"></div>
+      <div class="field"><label for="vType">Soort</label><select id="vType">${VELD_TYPES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></div></div>
+      <p class="hint">Het veld verschijnt bij elke klant, onder de vaste velden.</p>`,
+    onMount: (el) => setTimeout(() => $('#vLabel', el).focus(), 250),
+    onRight: async (el, close) => {
+      const label = $('#vLabel', el).value.trim();
+      if (!label) { toast('Geef het veld een naam'); $('#vLabel', el).focus(); return; }
+      const C = cfg();
+      if (C.extraVelden.some((v) => v.label.toLowerCase() === label.toLowerCase()) || ['naam', ...KLANT_VELDEN.map((v) => v[1].toLowerCase())].includes(label.toLowerCase())) { toast('Dat veld bestaat al'); return; }
+      setCfg('extraVelden', [...C.extraVelden, { id: uid(), label, type: $('#vType', el).value }]);
+      await save(); close(); render(); toast('Veld toegevoegd');
+    } });
+}
+async function delVeld(id) {
+  const v = cfg().extraVelden.find((x) => x.id === id); if (!v) return;
+  const n = state.klanten.filter((k) => k.extra && k.extra[id]).length;
+  if (!(await confirmBox({ title: `Veld ‘${v.label}’ verwijderen?`, text: n ? `Het is ingevuld bij ${n} ${n === 1 ? 'klant' : 'klanten'}. Die waarden worden ook gewist.` : 'Het veld is nog bij geen enkele klant ingevuld.' }))) return;
+  setCfg('extraVelden', cfg().extraVelden.filter((x) => x.id !== id));
+  state.klanten.forEach((k) => { if (k.extra) delete k.extra[id]; });
+  await save(); render(); toast('Veld verwijderd');
 }
 
 /* ---------- formulieren ---------- */
 function klantForm(k) {
   const isNew = !k; k = k || {};
+  const C = cfg(), V = C.klantVelden, ex = k.extra || {};
+  const std = {
+    bedrijf: `<input id="kBedrijf" name="bedrijf" value="${esc(k.bedrijf)}" placeholder="Optioneel">`,
+    telefoon: `<input id="kTel" name="telefoon" type="tel" value="${esc(k.telefoon)}" placeholder="+32 …">`,
+    email: `<input id="kMail" name="email" type="email" value="${esc(k.email)}" autocapitalize="off">`,
+    adres: `<textarea id="kAdres" name="adres" rows="2">${esc(k.adres)}</textarea>`,
+    notities: `<textarea id="kNot" name="notities" rows="3">${esc(k.notities)}</textarea>`
+  };
+  const stdId = { bedrijf: 'kBedrijf', telefoon: 'kTel', email: 'kMail', adres: 'kAdres', notities: 'kNot' };
+  const extraInput = (v, i) => v.type === 'textarea'
+    ? `<textarea id="kx${i}" name="x_${esc(v.id)}" rows="2">${esc(ex[v.id])}</textarea>`
+    : `<input id="kx${i}" name="x_${esc(v.id)}" type="${v.type === 'number' ? 'text' : v.type === 'date' ? 'date' : 'text'}" ${v.type === 'number' ? 'inputmode="decimal"' : ''} value="${esc(ex[v.id])}">`;
+  // het veld 'notities' blijft onderaan, na de eigen velden
+  const order = KLANT_VELDEN.filter(([f]) => V[f] && f !== 'notities');
   openSheet({
     title: isNew ? 'Nieuwe klant' : 'Klant bewerken', left: 'Annuleren', right: 'Bewaar',
     body: `<form class="group" id="kf" autocomplete="off">
       <div class="field"><label for="kNaam">Naam</label><input id="kNaam" name="naam" required value="${esc(k.naam)}" placeholder="Voor- en achternaam" autocapitalize="words"></div>
-      <div class="field"><label for="kBedrijf">Bedrijf</label><input id="kBedrijf" name="bedrijf" value="${esc(k.bedrijf)}" placeholder="Optioneel"></div>
-      <div class="field"><label for="kTel">Telefoon</label><input id="kTel" name="telefoon" type="tel" value="${esc(k.telefoon)}" placeholder="+32 …"></div>
-      <div class="field"><label for="kMail">E-mail</label><input id="kMail" name="email" type="email" value="${esc(k.email)}" autocapitalize="off"></div>
-      <div class="field"><label for="kAdres">Adres</label><textarea id="kAdres" name="adres" rows="2">${esc(k.adres)}</textarea></div>
-      <div class="field"><label for="kNot">Notities</label><textarea id="kNot" name="notities" rows="3">${esc(k.notities)}</textarea></div>
+      ${order.map(([f, l]) => `<div class="field"><label for="${stdId[f]}">${l}</label>${std[f]}</div>`).join('')}
+      ${C.extraVelden.map((v, i) => `<div class="field"><label for="kx${i}">${esc(v.label)}</label>${extraInput(v, i)}</div>`).join('')}
+      ${V.notities ? `<div class="field"><label for="kNot">Notities</label>${std.notities}</div>` : ''}
     </form>`,
     onMount: (el) => isNew && setTimeout(() => $('#kNaam', el).focus(), 250),
     onRight: async (el, close) => {
-      const f = $('#kf', el); const fd = Object.fromEntries(new FormData(f));
-      if (!fd.naam.trim()) { $('#kNaam', el).focus(); toast('Vul een naam in'); return; }
-      Object.keys(fd).forEach((x) => (fd[x] = fd[x].trim()));
-      if (isNew) state.klanten.push({ id: uid(), ...fd, aangemaakt: new Date().toISOString() });
-      else Object.assign(klantById(k.id), fd);
+      const f = $('#kf', el); const all = Object.fromEntries(new FormData(f));
+      if (!all.naam.trim()) { $('#kNaam', el).focus(); toast('Vul een naam in'); return; }
+      const fd = {}, extra = {};
+      for (const [n, v] of Object.entries(all)) {
+        const val = String(v).trim();
+        if (n.startsWith('x_')) { if (val) extra[n.slice(2)] = val; } else fd[n] = val;
+      }
+      if (isNew) state.klanten.push({ id: uid(), ...fd, extra, aangemaakt: new Date().toISOString() });
+      else {
+        const t = klantById(k.id); Object.assign(t, fd);
+        const keep = { ...(t.extra || {}) }; C.extraVelden.forEach((v) => delete keep[v.id]);
+        t.extra = { ...keep, ...extra };
+      }
       await save(); close(); render(); refreshDetail();
       toast(isNew ? 'Klant toegevoegd' : 'Klant bewaard');
     }
@@ -742,49 +923,63 @@ function klantDetail(id) {
     const k = klantById(id); if (!k) { ref.close(); return; }
     $('.sheet-head h2', ref.el).textContent = k.naam;
     const cards = kaartenVan(id).sort(byExp);
-    const rows = [['Bedrijf', k.bedrijf], ['Telefoon', k.telefoon], ['E-mail', k.email], ['Adres', k.adres]].filter((r) => r[1]);
+    const C = cfg(), V = C.klantVelden, F = C.functies;
+    const fmtExtra = (v, x) => (v.type === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(x) ? new Date(x + 'T12:00').toLocaleDateString('nl-BE') : x);
+    const rows = [
+      ...KLANT_VELDEN.filter(([f]) => V[f] && f !== 'notities').map(([f, l]) => [l, k[f]]),
+      ...C.extraVelden.map((v) => [esc(v.label), fmtExtra(v, (k.extra || {})[v.id])])
+    ].filter((r) => r[1]);
+    const knoppen = [
+      F.bankkaarten && `<button class="btn" data-act="kaartFor" data-soort="bank" data-id="${id}">Bankkaart toevoegen</button>`,
+      F.klantenkaarten && `<button class="btn ${F.bankkaarten ? 'secondary' : ''}" data-act="kaartFor" data-soort="klant" data-id="${id}">Klantenkaart toevoegen</button>`
+    ].filter(Boolean).join('');
     $('#kd', ref.el).innerHTML = `<div style="display:grid;gap:18px">
       <div style="display:flex;gap:14px;align-items:center"><span class="avatar" style="width:56px;height:56px;font-size:19px">${esc(initials(k.naam))}</span>
         <div style="min-width:0"><div style="font:700 22px var(--display);overflow-wrap:anywhere">${esc(k.naam)}</div><div class="row-sub">${cards.length} ${cards.length === 1 ? 'kaart' : 'kaarten'}</div></div></div>
       ${rows.length ? `<dl class="group kv">${rows.map(([a, b]) => `<dt>${a}</dt><dd>${esc(b)}</dd>`).join('')}</dl>` : ''}
-      ${k.notities ? `<div class="group" style="padding:14px;white-space:pre-wrap">${esc(k.notities)}</div>` : ''}
+      ${V.notities && k.notities ? `<div class="group" style="padding:14px;white-space:pre-wrap">${esc(k.notities)}</div>` : ''}
       <div><div class="section-label" style="margin-top:0">Kaarten</div>
         ${cards.length ? `<div class="card-grid">${cards.map((c) => cardItem(c, false)).join('')}</div>` : '<p class="hint">Nog geen kaarten voor deze klant.</p>'}</div>
-      <div class="actions"><button class="btn" data-act="kaartFor" data-soort="bank" data-id="${id}">Bankkaart toevoegen</button>
-        <button class="btn secondary" data-act="kaartFor" data-soort="klant" data-id="${id}">Klantenkaart toevoegen</button></div>
+      <div class="actions">${knoppen}</div>
       <button class="btn danger block" data-act="delKlant" data-id="${id}">Klant verwijderen</button></div>`;
   };
   ref.fill(); detailRef = ref;
 }
 
 function kaartForm(c, opts = {}) {
-  const isNew = !c; c = c || { klantId: opts.klantId || '', soort: opts.soort === 'klant' ? 'klant' : 'bank' };
+  const C = cfg(), F = C.functies, both = F.bankkaarten && F.klantenkaarten;
+  const enabled = (s) => (s === 'klant' ? F.klantenkaarten : F.bankkaarten);
+  let start = opts.soort === 'klant' || opts.soort === 'bank' ? opts.soort : 'klant';
+  if (!enabled(start)) start = F.klantenkaarten ? 'klant' : 'bank';
+  const isNew = !c; c = c || { klantId: opts.klantId || '', soort: start };
   let soort = isLoyal(c) ? 'klant' : 'bank';
   const L = soort === 'klant';
+  // velden die via de instellingen uit staan: verborgen, maar de waarde blijft behouden
+  const off = (on) => (on ? '' : 'data-off="1"');
   const klantOpts = [...state.klanten].sort(byName).map((k) => `<option value="${k.id}" ${k.id === c.klantId ? 'selected' : ''}>${esc(k.naam)}</option>`).join('');
   const kleur = safeColor(c.kleur);
   const ref = openSheet({
     title: isNew ? 'Nieuwe kaart' : L ? 'Klantenkaart bewerken' : 'Bankkaart bewerken', left: 'Annuleren', right: 'Bewaar',
     body: `
-      ${isNew ? `<div class="seg" role="group" aria-label="Soort kaart"><button type="button" data-soort="bank">Bankkaart</button><button type="button" data-soort="klant">Klantenkaart</button></div>` : ''}
-      <div class="scanbox" id="scanbox">
+      ${isNew && both ? `<div class="seg" role="group" aria-label="Soort kaart"><button type="button" data-soort="klant">Klantenkaart</button><button type="button" data-soort="bank">Bankkaart</button></div>` : ''}
+      <div class="scanbox" id="scanbox" ${F.scannen ? '' : 'hidden'}>
         <div class="scan-status" id="scanStatus" hidden><img id="scanImg" alt="Gescande kaart"><div class="txt"><span id="scanMsg">Kaart lezen…</span><div class="bar"><i id="scanBar"></i></div></div></div>
         <button class="btn block" type="button" data-act="scan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V6a3 3 0 0 1 3-3h2M16 3h2a3 3 0 0 1 3 3v2M21 16v2a3 3 0 0 1-3 3h-2M8 21H6a3 3 0 0 1-3-3v-2"/><path d="M7 12h10"/></svg><span id="scanLbl">Kaart scannen</span></button>
         <p class="hint" id="scanHint"></p>
       </div>
       <div id="preview"></div>
       <form class="group" id="cf" autocomplete="off">
-        <div class="field"><label for="cKlant">Klant</label><select id="cKlant" name="klantId"><option value="" id="noKlant">Kies een klant…</option>${klantOpts}<option value="__new">+ Nieuwe klant…</option></select></div>
+        <div class="field" ${off(F.klanten)}><label for="cKlant">Klant</label><select id="cKlant" name="klantId"><option value="" id="noKlant">Kies een klant…</option>${klantOpts}<option value="__new">+ Nieuwe klant…</option></select></div>
         <div class="field" data-for="klant"><label for="cWinkel">Winkel of merk</label><input id="cWinkel" name="winkel" value="${esc(c.winkel)}" placeholder="Delhaize" list="winkels"></div>
         <div class="field" data-for="klant"><label for="cLNum">Kaartnummer</label><input id="cLNum" name="lnummer" class="mono" value="${esc(L ? c.nummer : '')}" autocapitalize="characters" placeholder="Nummer onder de barcode"></div>
         <div class="field" data-for="klant"><label for="cFmt">Soort code</label><select id="cFmt" name="formaat"><option value="">Automatisch</option>${FORMATS.map(([v, n]) => `<option value="${v}" ${c.formaat === v ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
         <div class="field" data-for="bank"><label for="cNum">Kaartnummer</label><input id="cNum" name="nummer" class="mono" inputmode="numeric" autocomplete="off" value="${esc(L ? '' : formatNum(c.nummer))}" placeholder="0000 0000 0000 0000"></div>
         <div class="field-row" id="expRow">
           <div class="field"><label for="cExp">Geldig tot</label><input id="cExp" name="vervaldatum" class="mono" inputmode="numeric" value="${esc(c.vervaldatum)}" placeholder="MM/JJ" maxlength="5"></div>
-          <div class="field" data-for="bank"><label for="cBank">Bank</label><input id="cBank" name="bank" value="${esc(c.bank)}" placeholder="KBC" list="banken"></div>
+          <div class="field" data-for="bank" ${off(C.bankVelden.bank)}><label for="cBank">Bank</label><input id="cBank" name="bank" value="${esc(c.bank)}" placeholder="KBC" list="banken"></div>
         </div>
         <div class="field"><label for="cHouder" id="houderLbl">Kaarthouder</label><input id="cHouder" name="houder" value="${esc(c.houder)}" placeholder="Naam op de kaart"></div>
-        <div class="field" data-for="bank"><label for="cLabel">Omschrijving</label><input id="cLabel" name="label" value="${esc(c.label)}" placeholder="Zakelijke debetkaart"></div>
+        <div class="field" data-for="bank" ${off(C.bankVelden.label)}><label for="cLabel">Omschrijving</label><input id="cLabel" name="label" value="${esc(c.label)}" placeholder="Zakelijke debetkaart"></div>
         <div class="field" data-for="klant"><label id="kleurLbl">Kleur</label><div class="swatches" role="radiogroup" aria-labelledby="kleurLbl">${LCOLORS.map((col) => `<label style="--sw:${col}"><input type="radio" name="kleur" value="${col}" aria-label="Kleur ${col}" ${col === kleur ? 'checked' : ''}><span></span></label>`).join('')}</div></div>
         <div class="field"><label for="cNot">Notities</label><textarea id="cNot" name="notities" rows="2">${esc(c.notities)}</textarea></div>
       </form>
@@ -808,15 +1003,16 @@ function kaartForm(c, opts = {}) {
         }
         const n = d.nummer;
         if (!n) { h.textContent = ''; h.className = 'hint'; }
-        else if (n.length < 13) { h.textContent = `${n.length} cijfers ingevuld`; h.className = 'hint'; }
+        else if (n.length < 13 || !C.bankVelden.controle) { h.textContent = `${n.length} cijfers ingevuld`; h.className = 'hint'; }
         else if (luhn(n)) { h.textContent = `✓ Geldig ${BRAND_NAME[brandOf(n)]}-nummer`; h.className = 'hint ok'; }
         else { h.textContent = 'Dit nummer klopt niet (controlecijfer). Kijk het na.'; h.className = 'hint bad'; }
       };
       const setSoort = (s) => {
         soort = s;
-        $$('[data-for]', el).forEach((x) => (x.hidden = x.dataset.for !== s));
+        $$('[data-for]', el).forEach((x) => (x.hidden = x.dataset.for !== s || !!x.dataset.off));
+        $$('[data-off]', el).forEach((x) => (x.hidden = true));
         $$('.seg button', el).forEach((b) => b.setAttribute('aria-pressed', b.dataset.soort === s));
-        $('#expRow', el).classList.toggle('single', s === 'klant');
+        $('#expRow', el).classList.toggle('single', s === 'klant' || !C.bankVelden.bank);
         $('#noKlant', el).textContent = s === 'klant' ? 'Geen klant (eigen kaart)' : 'Kies een klant…';
         $('#scanLbl', el).textContent = s === 'klant' ? 'Barcode scannen' : 'Kaart scannen';
         $('#scanHint', el).textContent = s === 'klant'
@@ -859,7 +1055,7 @@ function kaartForm(c, opts = {}) {
       const d = ref.collect();
       if (d.klantId === '__new') d.klantId = '';
       if (d.soort === 'bank') {
-        if (!d.klantId) { toast('Kies een klant'); $('#cKlant', el).focus(); return; }
+        if (!d.klantId && F.klanten) { toast('Kies een klant'); $('#cKlant', el).focus(); return; }
         if (d.nummer.length < 12 || d.nummer.length > 19) { toast('Kaartnummer is onvolledig'); $('#cNum', el).focus(); return; }
       } else {
         if (!d.winkel) { toast('Vul de winkel in'); $('#cWinkel', el).focus(); return; }
@@ -867,7 +1063,7 @@ function kaartForm(c, opts = {}) {
       }
       if (d.vervaldatum && !parseExp(d.vervaldatum)) { toast('Datum moet MM/JJ zijn'); $('#cExp', el).focus(); return; }
       const dup = state.kaarten.find((x) => x.nummer === d.nummer && x.id !== c.id && isLoyal(x) === isLoyal(d));
-      if (dup && !(await confirmBox({ title: 'Kaart bestaat al', text: `Deze kaart staat al bij ${klantById(dup.klantId)?.naam || 'je eigen kaarten'}. Toch bewaren?`, ok: 'Toch bewaren', danger: false }))) return;
+      if (dup && !(await confirmBox({ title: 'Kaart bestaat al', text: F.klanten ? `Deze kaart staat al bij ${klantById(dup.klantId)?.naam || 'je eigen kaarten'}. Toch bewaren?` : 'Deze kaart staat al in je kaarten. Toch bewaren?', ok: 'Toch bewaren', danger: false }))) return;
       if (isNew) state.kaarten.push({ id: uid(), ...d, aangemaakt: new Date().toISOString() });
       else Object.assign(state.kaarten.find((x) => x.id === c.id), d);
       await save(); close(); render(); refreshDetail();
@@ -891,6 +1087,7 @@ function showKassa(c) {
 
 function kaartDetail(id) {
   const c = state.kaarten.find((x) => x.id === id); const k = klantById(c.klantId); const st = status(c);
+  const C = cfg(), F = C.functies;
   const ref = openSheet({ title: isLoyal(c) ? c.winkel || 'Klantenkaart' : 'Bankkaart', left: 'Terug', right: 'Wijzig', body: '<div id="cd"></div>',
     onRight: (el, close) => { close(); kaartForm(state.kaarten.find((x) => x.id === id)); } });
   const copyBtn = (target) => async () => {
@@ -904,7 +1101,7 @@ function kaartDetail(id) {
       <div class="bc-panel ${fmt === 'QR' ? 'qr' : ''}">${bc}<div class="bc-num">${esc(c.nummer)}</div></div>
       <div class="reveal-row">${bc ? '<button class="btn" data-kassa>Toon aan de kassa</button>' : ''}<button class="btn secondary" data-copy>Kopieer nummer</button></div>
       <dl class="group kv">
-        <dt>Klant</dt><dd>${k ? `<button class="text-btn" style="padding:0;min-width:0" data-act="openKlant" data-id="${k.id}">${esc(k.naam)}</button>` : 'Eigen kaart'}</dd>
+        ${F.klanten ? `<dt>Klant</dt><dd>${k ? `<button class="text-btn" style="padding:0;min-width:0" data-act="openKlant" data-id="${k.id}">${esc(k.naam)}</button>` : 'Eigen kaart'}</dd>` : ''}
         <dt>Winkel</dt><dd>${esc(c.winkel)}</dd>
         <dt>Soort code</dt><dd>${FORMAT_NAME[fmt]}</dd>
         ${c.houder ? `<dt>Op naam van</dt><dd>${esc(c.houder)}</dd>` : ''}
@@ -921,12 +1118,12 @@ function kaartDetail(id) {
     ${pcard(c)}
     <div class="reveal-row"><button class="btn secondary" data-reveal>Toon nummer</button><button class="btn secondary" data-copy>Kopieer nummer</button></div>
     <dl class="group kv">
-      <dt>Klant</dt><dd>${k ? `<button class="text-btn" style="padding:0;min-width:0" data-act="openKlant" data-id="${k.id}">${esc(k.naam)}</button>` : '—'}</dd>
+      ${F.klanten ? `<dt>Klant</dt><dd>${k ? `<button class="text-btn" style="padding:0;min-width:0" data-act="openKlant" data-id="${k.id}">${esc(k.naam)}</button>` : '—'}</dd>` : ''}
       <dt>Type</dt><dd>${BRAND_NAME[brandOf(c.nummer)]}</dd>
       ${c.bank ? `<dt>Bank</dt><dd>${esc(c.bank)}</dd>` : ''}
       ${c.label ? `<dt>Omschrijving</dt><dd>${esc(c.label)}</dd>` : ''}
       <dt>Geldig tot</dt><dd>${esc(c.vervaldatum || '—')} ${st.label ? `<span class="pill ${st.key}">${st.label}</span>` : ''}</dd>
-      <dt>Controle</dt><dd>${luhn(c.nummer) ? '<span class="pill ok">Nummer geldig</span>' : '<span class="pill bad">Nummer onjuist</span>'}</dd>
+      ${C.bankVelden.controle ? `<dt>Controle</dt><dd>${luhn(c.nummer) ? '<span class="pill ok">Nummer geldig</span>' : '<span class="pill bad">Nummer onjuist</span>'}</dd>` : ''}
     </dl>
     ${c.notities ? `<div class="group" style="padding:14px;white-space:pre-wrap">${esc(c.notities)}</div>` : ''}
     <button class="btn danger block" data-act="delKaart" data-id="${id}">Kaart verwijderen</button></div>`;
@@ -1187,7 +1384,7 @@ document.addEventListener('click', async (e) => {
   if (a === 'scan') startScan(currentFormRef());
   if (a === 'openKlant') { closeAllSheets(); klantDetail(id); }
   if (a === 'delKlant') {
-    const k = klantById(id), n = kaartenVan(id).length;
+    const k = klantById(id), n = alleKaartenVan(id).length;
     if (await confirmBox({ title: `${k.naam} verwijderen?`, text: n ? `Ook ${n} ${n === 1 ? 'gekoppelde kaart wordt' : 'gekoppelde kaarten worden'} verwijderd.` : 'Dit kan niet ongedaan worden.' })) {
       state.klanten = state.klanten.filter((x) => x.id !== id); state.kaarten = state.kaarten.filter((x) => x.klantId !== id);
       await save(); closeAllSheets(); render(); toast('Klant verwijderd');
@@ -1203,13 +1400,15 @@ document.addEventListener('click', async (e) => {
   if (a === 'export') exportBackup();
   if (a === 'import') $('#importInput').click();
   if (a === 'changeCode') changeCode();
+  if (a === 'addVeld') addVeld();
+  if (a === 'delVeld') delVeld(id);
   if (a === 'wipe') wipeAll();
 });
 function currentFormRef() { formRefs = formRefs.filter((r) => document.body.contains(r.el)); return formRefs[formRefs.length - 1]; }
 
 $('#addBtn').addEventListener('click', () => {
   if (tab === 'klanten') klantForm();
-  else kaartForm(null, { soort: cardFilter === 'klant' ? 'klant' : 'bank' });
+  else kaartForm(null, { soort: cardFilter === 'klant' || cardFilter === 'bank' ? cardFilter : '' });
 });
 $('#q').addEventListener('input', (e) => { query = e.target.value.trim(); render(); });
 addEventListener('scroll', () => $('#top').classList.toggle('scrolled', scrollY > 4), { passive: true });
@@ -1218,13 +1417,15 @@ function loadDemo() {
   const y = new Date().getFullYear() % 100, m = new Date().getMonth() + 1;
   const pad = (n) => String(n).padStart(2, '0');
   const soon = m === 12 ? `01/${pad(y + 1)}` : `${pad(m + 1)}/${pad(y)}`;
+  const F = cfg().functies;
   const a = uid(), b = uid(), c = uid();
-  state.klanten.push(
+  const kl = [], ka = [];
+  kl.push(
     { id: a, naam: 'Lotte Peeters', bedrijf: 'Bakkerij Peeters', telefoon: '+32 470 12 34 56', email: 'lotte@voorbeeld.be', adres: 'Kerkstraat 12, 9000 Gent', notities: 'Voorbeeldklant, mag je verwijderen.' },
     { id: b, naam: 'Jonas Maes', bedrijf: '', telefoon: '+32 498 76 54 32', email: '', adres: '', notities: 'Voorbeeldklant, mag je verwijderen.' },
     { id: c, naam: 'Sarah Claes', bedrijf: 'Claes Architecten', telefoon: '', email: 'sarah@voorbeeld.be', adres: '', notities: 'Voorbeeldklant, mag je verwijderen.' });
   // testnummers (geen echte kaarten)
-  state.kaarten.push(
+  ka.push(
     { id: uid(), klantId: a, nummer: '4111111111111111', vervaldatum: `08/${pad(y + 3)}`, houder: 'LOTTE PEETERS', bank: 'KBC', label: 'Zakelijke kredietkaart' },
     { id: uid(), klantId: a, nummer: '6703444444444449', vervaldatum: soon, houder: 'LOTTE PEETERS', bank: 'Belfius', label: 'Debetkaart' },
     { id: uid(), klantId: b, nummer: '5555555555554444', vervaldatum: `03/${pad(y - 1)}`, houder: 'JONAS MAES', bank: 'ING', label: '' },
@@ -1232,6 +1433,8 @@ function loadDemo() {
     { id: uid(), klantId: '', soort: 'klant', winkel: 'IKEA Family', nummer: '6275980123456789', formaat: 'CODE128', houder: '', kleur: '#1f3a93', notities: 'Voorbeeldkaart' },
     { id: uid(), klantId: c, soort: 'klant', winkel: 'Bibliotheek Gent', nummer: 'BIB-0087-3421', formaat: 'QR', houder: 'Sarah Claes', vervaldatum: `06/${pad(y + 1)}`, kleur: '#2e8540', notities: '' },
     { id: uid(), klantId: c, nummer: '378282246310005', vervaldatum: `11/${pad(y + 2)}`, houder: 'SARAH CLAES', bank: 'BNP Paribas Fortis', label: 'Amex Business' });
+  if (F.klanten) state.klanten.push(...kl);
+  state.kaarten.push(...ka.filter(isVisible).map((x) => (F.klanten ? x : { ...x, klantId: '' })));
 }
 
 /* ---------- back-up ---------- */
@@ -1256,7 +1459,7 @@ $('#importInput').addEventListener('change', async (e) => {
     onRight: async (el, close) => {
       try {
         const r = await openVault(vault, $('#impCode', el).value);
-        key = r.k; salt = r.s; state = r.data; await save(); close(); render(); toast('Back-up teruggezet');
+        key = r.k; salt = r.s; state = migrate(r.data); await save(); close(); render(); toast('Back-up teruggezet');
       } catch { $('#impErr', el).textContent = 'Code klopt niet voor deze back-up.'; }
     } });
 });
@@ -1301,7 +1504,7 @@ async function showLock() {
   $('#lockBtn').textContent = mode === 'setup' ? 'Code instellen' : 'Ontgrendelen';
   setTimeout(() => $('#code1').focus(), 100);
 }
-function showApp() { $('#lock').hidden = true; $('#app').hidden = false; tab = 'klanten'; render(); }
+function showApp() { $('#lock').hidden = true; $('#app').hidden = false; tab = cfg().functies.klanten ? 'klanten' : 'kaarten'; render(); }
 
 $('#lockForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -1313,11 +1516,11 @@ $('#lockForm').addEventListener('submit', async (e) => {
     if (mode === 'setup') {
       if (c1 !== $('#code2').value) { err.textContent = 'De codes zijn niet gelijk.'; return; }
       salt = crypto.getRandomValues(new Uint8Array(16)); key = await deriveKey(c1, salt);
-      state = { klanten: [], kaarten: [] }; await save(); showApp();
+      state = freshState(); await save(); showApp();
     } else {
       try {
         const r = await openVault(await kv('get', 'vault'), c1);
-        key = r.k; salt = r.s; state = r.data; fails = 0; showApp();
+        key = r.k; salt = r.s; state = migrate(r.data); fails = 0; showApp();
       } catch {
         fails++; $('#code1').value = '';
         if (fails >= 5) { blockedUntil = Date.now() + 30000 * (fails - 4); err.textContent = 'Te veel foute pogingen. Wacht even.'; }
@@ -1335,18 +1538,18 @@ $('#lockNow').addEventListener('click', showLock);
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) hiddenAt = Date.now();
-  else if (key && !PREVIEW && Date.now() - hiddenAt > 60000) showLock();
+  else if (key && !PREVIEW && Date.now() - hiddenAt >= cfg().vergrendelMin * 60000) showLock();
 });
 
 /* ---------- start ---------- */
-if (PREVIEW) { key = 'preview'; loadDemo(); $('#lockNow').hidden = true; showApp(); }
+if (PREVIEW) { key = 'preview'; state = freshState(); loadDemo(); $('#lockNow').hidden = true; showApp(); }
 else if (!window.isSecureContext || !crypto.subtle) {
   $('#lockText').textContent = 'Open de app via https:// (of localhost). Versleuteling werkt niet op een onbeveiligd adres.';
   $('#lockBtn').disabled = true;
 } else showLock();
 if (!PREVIEW && 'serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 // herkenning alvast klaarzetten na ontgrendelen zodat de eerste scan sneller gaat
-document.addEventListener('click', function warm() { if (key && !PREVIEW) { setTimeout(() => getOcr().catch(() => {}), 1500); document.removeEventListener('click', warm); } });
+document.addEventListener('click', function warm() { if (key && !PREVIEW && cfg().functies.scannen) { setTimeout(() => getOcr().catch(() => {}), 1500); document.removeEventListener('click', warm); } });
 </script>
 </body>
 </html>

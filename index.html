@@ -827,7 +827,8 @@ async function renderInstellingen() {
   const C = cfg(), F = C.functies, vis = zichtbareKaarten(), st = vis.map(status);
   const swa = (path, on, locked = false) => `role="switch" data-toggle="${path}" aria-checked="${!!on}"${locked ? ' aria-disabled="true"' : ''}`;
   const opt = (path, cur, list) => `<select data-cfg="${path}" data-num>${list.map(([v, l]) => `<option value="${v}" ${+cur === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
-  const onlyCardType = (k) => F[k] && !F[k === 'bankkaarten' ? 'klantenkaarten' : 'bankkaarten'];
+  // alleen de twee kaartsoorten: de laatste die aan staat, kan niet uit
+  const onlyCardType = (k) => (k === 'bankkaarten' || k === 'klantenkaarten') && F[k] && !F[k === 'bankkaarten' ? 'klantenkaarten' : 'bankkaarten'];
   const stats = [
     F.klanten && [state.klanten.length, 'klanten'],
     F.klantenkaarten && F.bankkaarten ? [vis.length, 'kaarten'] : [vis.length, F.bankkaarten ? 'bankkaarten' : 'klantenkaarten'],

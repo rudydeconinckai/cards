@@ -1527,7 +1527,9 @@ async function wipeAll() {
 
 /* ---------- vergrendelen ---------- */
 let fails = 0, blockedUntil = 0, mode = 'unlock';
+let updateReady = false;
 async function showLock() {
+  if (updateReady) { updateReady = false; location.reload(); return; }
   key = null; state = { klanten: [], kaarten: [] }; closeAllSheets();
   $('#app').hidden = true; $('#lock').hidden = false; view.innerHTML = '';
   const vault = await kv('get', 'vault');
@@ -1586,7 +1588,19 @@ else if (!window.isSecureContext || !crypto.subtle) {
   $('#lockText').textContent = 'Open de app via https:// (of localhost). Versleuteling werkt niet op een onbeveiligd adres.';
   $('#lockBtn').disabled = true;
 } else showLock();
-if (!PREVIEW && 'serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+if (!PREVIEW && 'serviceWorker' in navigator && location.protocol !== 'file:') {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    // bij terugkeren naar de app nakijken of er een nieuwe versie is
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch(() => {});
+  // nieuwe versie actief: meteen herladen op het vergrendelscherm, anders bij het volgende vergrendelen
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return; // eerste installatie: niets te verversen
+    updateReady = true;
+    if (!key) location.reload();
+  });
+}
 // herkenning alvast klaarzetten na ontgrendelen zodat de eerste scan sneller gaat
 document.addEventListener('click', function warm() { if (key && !PREVIEW && cfg().functies.scannen) { setTimeout(() => getOcr().catch(() => {}), 1500); document.removeEventListener('click', warm); } });
 </script>

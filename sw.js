@@ -18,8 +18,14 @@ const FILES = [
   './vendor/lang/eng.traineddata.gz'
 ];
 
+// cache: 'reload' omzeilt de browsercache (GitHub Pages bewaart bestanden 10 minuten),
+// zodat een nieuwe versie nooit de vorige pagina opslaat.
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
@@ -30,8 +36,24 @@ self.addEventListener('activate', (e) => {
   );
 });
 
+const isPage = (req) => req.mode === 'navigate' || /\/(index\.html)?$/.test(new URL(req.url).pathname);
+
+// De pagina zelf: eerst het netwerk (zodat je altijd de nieuwste versie krijgt),
+// zonder netwerk of na 4 seconden de bewaarde versie.
+function pageFirstNetwork(req) {
+  const fromCache = () => caches.match(req, { ignoreSearch: true }).then((hit) => hit || caches.match('./index.html'));
+  const net = fetch(req, { cache: 'no-cache' }).then((res) => {
+    if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put('./index.html', copy)); }
+    return res;
+  });
+  const timeout = new Promise((resolve) => setTimeout(resolve, 4000)).then(fromCache);
+  return Promise.race([net.catch(fromCache), timeout]).then((res) => res || net);
+}
+
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  if (isPage(e.request)) { e.respondWith(pageFirstNetwork(e.request)); return; }
+  // Overige bestanden (scanbibliotheken, iconen) veranderen zelden: eerst uit de cache.
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then((hit) => {
       if (hit) return hit;

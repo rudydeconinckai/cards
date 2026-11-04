@@ -117,7 +117,7 @@ header.top.scrolled { border-bottom-color: var(--line); }
 .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .chip .n { font-variant-numeric: tabular-nums; opacity: .75; margin-left: 4px; }
 
-main { flex: 1; padding-block: 8px calc(160px + var(--dock) + env(safe-area-inset-bottom, 0px)); }
+main { flex: 1; padding-block: 8px calc(96px + var(--dock) + env(safe-area-inset-bottom, 0px)); }
 .list { display: grid; gap: 10px; }
 .section-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 18px 0 8px; }
 
@@ -165,6 +165,26 @@ main { flex: 1; padding-block: 8px calc(160px + var(--dock) + env(safe-area-inse
 .pcard .pc-bot > div { min-width: 0; }
 .card-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
 .card-item { display: grid; gap: 6px; }
+/* kaarten als iconen met initialen */
+.icon-grid { display: grid; gap: 18px 10px; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+.cicon { border: 0; background: none; padding: 4px 0; display: grid; justify-items: center; gap: 6px; min-width: 0; text-align: center; color: var(--ink); }
+.cicon .tile {
+  position: relative; width: 68px; height: 68px; border-radius: 18px; display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--c1), var(--c2)); color: #fff; box-shadow: var(--shadow);
+  font: 800 24px/1 var(--display); letter-spacing: .02em;
+}
+.cicon .tile.loyal { --c1: var(--lc); --c2: color-mix(in srgb, var(--lc) 72%, #000); }
+.cicon .tile.visa { --c1: #1b2f6b; --c2: #2e4fa8; }
+.cicon .tile.mastercard { --c1: #2a2522; --c2: #5a3a22; }
+.cicon .tile.bancontact { --c1: #0c4a66; --c2: #1a7a8c; }
+.cicon .tile.maestro { --c1: #2b2f4d; --c2: #4a4f7a; }
+.cicon .tile.amex { --c1: #1f4f4a; --c2: #3a7d72; }
+.cicon .tile.other { --c1: #2f3a37; --c2: #55625d; }
+.cicon .dot { position: absolute; top: -4px; right: -4px; width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--bg); }
+.cicon .dot.warn { background: var(--warn); }
+.cicon .dot.bad { background: var(--bad); }
+.cicon .nm { font-size: 13px; font-weight: 650; line-height: 1.25; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cicon .sb { font-size: 12px; color: var(--muted); line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: -4px; }
 .card-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-inline: 4px; font-size: 14px; color: var(--muted); }
 .card-meta span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -199,7 +219,7 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
 .sheet {
   width: 100%; max-width: 640px; max-height: calc(100% - env(safe-area-inset-top, 0px) - 12px); overflow: auto; background: var(--bg);
   border-radius: 18px 18px 0 0; animation: up .22s ease-out; -webkit-overflow-scrolling: touch;
-  display: flex; flex-direction: column;
+  padding-bottom: calc(24px + var(--dock) + env(safe-area-inset-bottom, 0px));
 }
 @keyframes up { from { transform: translateY(40px); opacity: .3; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
@@ -207,30 +227,10 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
   position: sticky; top: 0; z-index: 2; background: var(--bg); display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding-block: 10px; border-bottom: 1px solid var(--line);
 }
-.sheet-head { padding-block: 14px; }
-.sheet-head::before { content: ""; position: absolute; top: 5px; left: 50%; transform: translateX(-50%); width: 36px; height: 5px; border-radius: 99px; background: var(--line); }
 .sheet-head h2 { margin: 0; font: 700 17px var(--display); text-align: center; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .text-btn { background: none; border: 0; color: var(--accent); font-weight: 600; padding: 8px 4px; min-width: 72px; }
 .text-btn.right { text-align: right; font-weight: 700; }
 .text-btn[disabled] { opacity: .4; }
-.sheet-body { flex: 1; }
-/* knoppen onderaan het blad, binnen bereik van de duim */
-.sheet-foot {
-  position: sticky; bottom: 0; z-index: 2; display: flex; gap: 10px; background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid var(--line);
-  padding-top: 10px; padding-bottom: calc(10px + var(--dock) + env(safe-area-inset-bottom, 0px));
-}
-.sheet-foot .btn { flex: 1; }
-/* zwevende knoppen boven de tabbalk */
-.fabs {
-  position: fixed; left: 0; right: 0; z-index: 7; pointer-events: none; display: flex; justify-content: space-between; align-items: flex-end;
-  bottom: calc(76px + var(--dock) + env(safe-area-inset-bottom, 0px));
-  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
-}
-.fabs .icon-btn { pointer-events: auto; box-shadow: var(--shadow); }
-.fabs #addBtn { width: 58px; height: 58px; margin-left: auto; }
-.fabs #addBtn svg { width: 26px; height: 26px; }
-.fabs #lockNow { width: 46px; height: 46px; background: var(--surface); }
 .sheet-body { padding-block: 16px; display: grid; gap: 18px; }
 
 .group { background: var(--surface); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
@@ -329,7 +329,7 @@ label.setting { cursor: pointer; }
 .field-row.single { grid-template-columns: 1fr; }
 .field-row.single .field:first-child { border-right: 0; }
 #toast {
-  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(148px + var(--dock) + env(safe-area-inset-bottom, 0px)); z-index: 40;
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(88px + var(--dock) + env(safe-area-inset-bottom, 0px)); z-index: 40;
   background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 600; font-size: 15px;
   max-width: calc(100% - 32px); box-shadow: var(--shadow);
 }
@@ -366,6 +366,14 @@ label.setting { cursor: pointer; }
   <header class="top gutter" id="top">
     <div class="top-row">
       <h1 id="viewTitle">Klanten</h1>
+      <div style="display:flex;gap:8px">
+        <button class="icon-btn" id="lockNow" aria-label="Vergrendelen" title="Vergrendelen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        </button>
+        <button class="icon-btn primary" id="addBtn" aria-label="Toevoegen" title="Toevoegen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
     </div>
     <div class="search" id="searchWrap">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -375,15 +383,6 @@ label.setting { cursor: pointer; }
   </header>
 
   <main class="gutter" id="view"></main>
-
-  <div class="fabs">
-        <button class="icon-btn" id="lockNow" aria-label="Vergrendelen" title="Vergrendelen">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
-        </button>
-        <button class="icon-btn primary" id="addBtn" aria-label="Toevoegen" title="Toevoegen">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        </button>
-  </div>
 
   <nav class="tabs" aria-label="Hoofdmenu">
     <button data-tab="klanten" aria-current="page" hidden>
@@ -666,10 +665,9 @@ function openSheet({ title, left = 'Sluiten', right = '', onRight, body, onMount
   const scrim = document.createElement('div');
   scrim.className = 'scrim';
   scrim.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}">
-    <div class="sheet-head gutter"><h2>${esc(title)}</h2></div>
-    <div class="sheet-body gutter">${body}</div>
-    <div class="sheet-foot gutter"><button class="btn secondary" data-close>${esc(left)}</button>
-    ${right ? `<button class="btn" data-right>${esc(right)}</button>` : ''}</div></div>`;
+    <div class="sheet-head gutter"><button class="text-btn" data-close>${esc(left)}</button><h2>${esc(title)}</h2>
+    ${right ? `<button class="text-btn right" data-right>${esc(right)}</button>` : '<span style="min-width:72px"></span>'}</div>
+    <div class="sheet-body gutter">${body}</div></div>`;
   const close = () => { scrim.remove(); sheets.splice(sheets.indexOf(close), 1); };
   scrim.addEventListener('click', (e) => { if (e.target === scrim || e.target.closest('[data-close]')) close(); });
   if (onRight) $('[data-right]', scrim).addEventListener('click', () => onRight(scrim, close));
@@ -750,14 +748,26 @@ function pcard(c, { reveal = false, tag = 'div' } = {}) {
     <div style="text-align:right"><div class="lbl">Geldig tot</div><div class="exp">${esc(c.vervaldatum || '--/--')}</div></div></div>
   </${tag}>`;
 }
+// twee letters: eerste letters van de eerste twee woorden, of de eerste twee tekens van één woord
+function initials2(name) {
+  const w = String(name || '').normalize('NFC').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  if (!w.length) return '?';
+  const t = w.length >= 2 ? w[0][0] + w[1][0] : [...w[0]].slice(0, 2).join('');
+  return t.toUpperCase();
+}
 function cardItem(c, showKlant = true) {
-  const st = status(c), k = klantById(c.klantId);
-  const who = !showKlant ? (isLoyal(c) ? 'Klantenkaart' : c.label || '')
-    : cfg().functies.klanten ? (k ? k.naam : isLoyal(c) ? 'Eigen kaart' : 'Zonder klant')
-    : isLoyal(c) ? (c.houder || '') : (c.label || c.houder || '');
-  return `<div class="card-item">${pcard(c, { tag: 'button' })}
-    <div class="card-meta"><span>${esc(who)}</span>
-    ${st.label ? `<span class="pill ${st.key}">${st.label}</span>` : ''}</div></div>`;
+  const st = status(c), k = klantById(c.klantId), L = isLoyal(c);
+  const b = L ? '' : brandOf(c.nummer);
+  const name = L ? c.winkel || 'Klantenkaart' : c.bank || c.label || BRAND_NAME[b];
+  const who = !showKlant ? (L ? '' : c.label || '')
+    : cfg().functies.klanten ? (k ? k.naam : L ? 'Eigen kaart' : 'Zonder klant')
+    : L ? (c.houder || '') : (c.label || c.houder || '');
+  const sub = L ? who : [`•• ${digits(c.nummer).slice(-4)}`, who].filter(Boolean).join(' · ');
+  const aria = [L ? `Klantenkaart ${name}` : `${BRAND_NAME[b]} ${name} eindigend op ${digits(c.nummer).slice(-4)}`, who, st.label].filter(Boolean).join(', ');
+  return `<button class="cicon" data-kaart="${c.id}" aria-label="${esc(aria)}">
+    <span class="tile ${L ? 'loyal' : b}" ${L ? `style="--lc:${safeColor(c.kleur)}"` : ''} aria-hidden="true">${esc(initials2(name))}
+      ${st.key === 'warn' || st.key === 'bad' ? `<span class="dot ${st.key}"></span>` : ''}</span>
+    <span class="nm" aria-hidden="true">${esc(name)}</span>${sub ? `<span class="sb" aria-hidden="true">${esc(sub)}</span>` : ''}</button>`;
 }
 
 function renderKaarten() {
@@ -782,7 +792,7 @@ function renderKaarten() {
       ${!F.klanten && !state.kaarten.length ? '<button class="btn secondary" data-act="demo">Voorbeeldgegevens laden</button>' : ''}</div>`;
     return;
   }
-  view.innerHTML = list.length ? `<div class="card-grid" style="margin-top:8px">${list.map((c) => cardItem(c)).join('')}</div>`
+  view.innerHTML = list.length ? `<div class="icon-grid" style="margin-top:12px">${list.map((c) => cardItem(c)).join('')}</div>`
     : `<div class="empty"><h2>Geen kaarten</h2><p>Er zijn geen kaarten in deze selectie.</p></div>`;
 }
 
@@ -961,7 +971,7 @@ function klantDetail(id) {
       ${rows.length ? `<dl class="group kv">${rows.map(([a, b]) => `<dt>${a}</dt><dd>${esc(b)}</dd>`).join('')}</dl>` : ''}
       ${V.notities && k.notities ? `<div class="group" style="padding:14px;white-space:pre-wrap">${esc(k.notities)}</div>` : ''}
       <div><div class="section-label" style="margin-top:0">Kaarten</div>
-        ${cards.length ? `<div class="card-grid">${cards.map((c) => cardItem(c, false)).join('')}</div>` : '<p class="hint">Nog geen kaarten voor deze klant.</p>'}</div>
+        ${cards.length ? `<div class="icon-grid">${cards.map((c) => cardItem(c, false)).join('')}</div>` : '<p class="hint">Nog geen kaarten voor deze klant.</p>'}</div>
       <div class="actions">${knoppen}</div>
       <button class="btn danger block" data-act="delKlant" data-id="${id}">Klant verwijderen</button></div>`;
   };

@@ -1,5 +1,5 @@
 // Kaartbeheer service worker: alles lokaal bewaren zodat de app offline werkt.
-const CACHE = 'kaartbeheer-v5';
+const CACHE = 'kaartbeheer-v6';
 const FILES = [
   './',
   './index.html',

@@ -56,6 +56,10 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { height: 100%; }
+/* --gap: iOS-beginschermapps met doorzichtige statusbalk melden een scherm dat een statusbalk korter is
+   dan het echte scherm. JavaScript meet dat verschil; vaste elementen schuiven zoveel naar onder. */
+:root { --gap: 0px; }
+html.locked { background: var(--accent); }
 body {
   margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 var(--font);
   -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
@@ -89,7 +93,7 @@ button { cursor: pointer; }
 .lock-link { background: none; border: 0; color: inherit; opacity: .75; text-decoration: underline; padding: 4px 0; justify-self: start; }
 
 /* ---------- app ---------- */
-#app { min-height: 100%; display: flex; flex-direction: column; }
+#app { min-height: 100%; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
 header.top {
   position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg);
@@ -204,7 +208,7 @@ main { flex: 1; padding-block: 8px calc(96px + var(--dock) + env(safe-area-inset
 
 /* tabbalk */
 nav.tabs {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: grid; grid-template-columns: repeat(3, 1fr);
+  position: fixed; left: 0; right: 0; bottom: calc(-1 * var(--gap)); z-index: 6; display: grid; grid-template-columns: repeat(3, 1fr);
   margin-bottom: 0;
   background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: saturate(1.6) blur(18px); -webkit-backdrop-filter: saturate(1.6) blur(18px);
   border-top: 1px solid var(--line);
@@ -216,7 +220,7 @@ nav.tabs button svg { width: 24px; height: 24px; }
 nav.tabs button[aria-current="page"] { color: var(--accent); }
 
 /* bladen (sheets) */
-.scrim { position: fixed; inset: 0; background: rgba(5,12,10,.45); z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
+.scrim { position: fixed; inset: 0 0 calc(-1 * var(--gap)); background: rgba(5,12,10,.45); z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
 .sheet {
   width: 100%; max-width: 640px; max-height: calc(100% - env(safe-area-inset-top, 0px) - 12px); overflow: auto; background: var(--bg);
   border-radius: 18px 18px 0 0; animation: up .22s ease-out; -webkit-overflow-scrolling: touch;
@@ -298,7 +302,7 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
 .bc-panel svg { width: 100%; max-width: 380px; height: 110px; display: block; }
 .bc-panel.qr svg { width: 210px; height: 210px; }
 .bc-num { font: 600 18px var(--mono); letter-spacing: .08em; color: #111; overflow-wrap: anywhere; text-align: center; }
-.kassa { position: fixed; inset: 0; z-index: 60; background: #fff; color: #111; display: grid; place-content: center; justify-items: center; gap: 18px; text-align: center;
+.kassa { position: fixed; inset: 0 0 calc(-1 * var(--gap)); z-index: 60; background: #fff; color: #111; display: grid; place-content: center; justify-items: center; gap: 18px; text-align: center;
   padding: calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + var(--dock) + 24px) max(20px, env(safe-area-inset-left, 0px)); }
 .kassa h3 { margin: 0; font: 800 26px var(--display); color: #111; }
 .kassa svg { width: min(92vw, 560px); height: 170px; display: block; }
@@ -421,6 +425,20 @@ document.getElementById('lockVer').textContent = APP_VERSION;
    Gegevens: versleuteld (AES-GCM, sleutel uit toegangscode via PBKDF2) in IndexedDB.
    ========================================================= */
 const $ = (s, el = document) => el.querySelector(s);
+
+/* iOS-beginschermapp: meet hoeveel het gemelde scherm korter is dan het echte (zie --gap in de CSS). */
+function measureGap() {
+  let gap = 0;
+  const standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+  if (standalone && matchMedia('(orientation: portrait)').matches && screen.height > innerHeight) {
+    gap = screen.height - innerHeight;
+    if (gap > 80) gap = 0; // geen statusbalkverschil maar iets anders (bv. toetsenbord open): niets doen
+  }
+  document.documentElement.style.setProperty('--gap', gap + 'px');
+}
+measureGap();
+addEventListener('resize', measureGap);
+addEventListener('orientationchange', () => setTimeout(measureGap, 300));
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
@@ -1531,7 +1549,7 @@ let updateReady = false;
 async function showLock() {
   if (updateReady) { updateReady = false; location.reload(); return; }
   key = null; state = { klanten: [], kaarten: [] }; closeAllSheets();
-  $('#app').hidden = true; $('#lock').hidden = false; view.innerHTML = '';
+  $('#app').hidden = true; $('#lock').hidden = false; view.innerHTML = ''; document.documentElement.classList.add('locked');
   const vault = await kv('get', 'vault');
   mode = vault ? 'unlock' : 'setup';
   $('#code1').value = ''; $('#code2').value = ''; $('#lockErr').textContent = '';
@@ -1545,7 +1563,7 @@ async function showLock() {
   $('#lockBtn').textContent = mode === 'setup' ? 'Code instellen' : 'Ontgrendelen';
   setTimeout(() => $('#code1').focus(), 100);
 }
-function showApp() { $('#lock').hidden = true; $('#app').hidden = false; tab = cfg().functies.klanten ? 'klanten' : 'kaarten'; render(); }
+function showApp() { document.documentElement.classList.remove('locked'); $('#lock').hidden = true; $('#app').hidden = false; tab = cfg().functies.klanten ? 'klanten' : 'kaarten'; render(); }
 
 $('#lockForm').addEventListener('submit', async (e) => {
   e.preventDefault();

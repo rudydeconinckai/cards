@@ -85,6 +85,7 @@ button { cursor: pointer; }
 .lock-field input::placeholder { color: inherit; opacity: .4; letter-spacing: normal; font: 16px var(--font); }
 .lock-btn { padding: 15px; border: 0; border-radius: 12px; background: var(--accent-ink); color: var(--accent); font-weight: 700; font-size: 17px; }
 .lock-err { min-height: 1.4em; font-weight: 600; color: #ffd0c9; }
+.lock-ver { font: 500 12px/1.4 var(--mono); opacity: .55; margin: 4px 0 0; letter-spacing: .02em; }
 .lock-link { background: none; border: 0; color: inherit; opacity: .75; text-decoration: underline; padding: 4px 0; justify-self: start; }
 
 /* ---------- app ---------- */
@@ -358,6 +359,7 @@ label.setting { cursor: pointer; }
     <div class="lock-err" id="lockErr" role="alert"></div>
     <button class="lock-btn" id="lockBtn" type="submit">Ontgrendelen</button>
     <button class="lock-link" id="forgotBtn" type="button">Code vergeten?</button>
+    <p class="lock-ver" id="lockVer"></p>
   </form>
 </section>
 
@@ -410,6 +412,10 @@ label.setting { cursor: pointer; }
 <script src="vendor/qrcode.js"></script>
 <script>
 'use strict';
+/* Versie: de deploy-workflow vult het buildnummer en de datum in. Lokaal staat er 'ontwikkelversie'. */
+const APP_BUILD = '__BUILD__', APP_DATE = '__DATE__';
+const APP_VERSION = /^\d+$/.test(APP_BUILD) ? `Versie ${APP_BUILD}` + (/^\d{4}-\d{2}-\d{2}$/.test(APP_DATE) ? ` · ${new Date(APP_DATE + 'T12:00').toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' })}` : '') : 'Ontwikkelversie';
+document.getElementById('lockVer').textContent = APP_VERSION;
 /* =========================================================
    Kaartbeheer – klanten en bankkaarten, volledig offline.
    Gegevens: versleuteld (AES-GCM, sleutel uit toegangscode via PBKDF2) in IndexedDB.
@@ -854,6 +860,7 @@ async function renderInstellingen() {
     </div>
     <div class="section-label">Gegevens</div>
     <div class="group">
+      <div class="setting"><span class="s-main"><span>App-versie</span><span class="s-sub">${esc(APP_VERSION)}</span></span></div>
       <div class="setting"><span class="s-main"><span>Laatst opgeslagen</span><span class="s-sub">${esc(upd)} · alleen op dit toestel</span></span></div>
       <button class="setting danger" data-act="wipe"><span class="s-main"><span>Alles wissen</span><span class="s-sub">Verwijdert alle klanten, kaarten en de code</span></span></button>
     </div>

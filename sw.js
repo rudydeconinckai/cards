@@ -1,5 +1,6 @@
 // Kaartbeheer service worker: alles lokaal bewaren zodat de app offline werkt.
-const CACHE = 'kaartbeheer-v7';
+// Het buildnummer wordt bij elke deploy ingevuld, zodat elke nieuwe versie een verse cache krijgt.
+const CACHE = 'kaartbeheer-__BUILD__';
 const FILES = [
   './',
   './index.html',

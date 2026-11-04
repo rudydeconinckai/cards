@@ -16,6 +16,23 @@ https-adres geopend worden, zodat de iPhone ze kan bewaren.
    Laat de app één keer volledig laden (± 10 MB voor de scanfunctie).
    Daarna werkt alles zonder internet, ook in vliegtuigmodus.
 
+Functies kiezen
+- Standaard staan alleen KLANTENKAARTEN aan (winkel- en lidkaarten met barcode).
+- Via Instellingen > Functies zet je extra onderdelen aan of uit:
+    Klantenkaarten, Bankkaarten, Klanten (klantenbestand) en Scannen met camera.
+  Minstens één soort kaart moet aan staan.
+- Met Klanten aan bepaal je onder Instellingen > Klantgegevens welke velden een
+  klant heeft (bedrijf, telefoon, e-mail, adres, notities) en voeg je eigen
+  velden toe (bv. klantnummer, btw-nummer, geboortedatum).
+- Met Bankkaarten aan kies je of de velden Bank en Omschrijving en de
+  nummercontrole getoond worden.
+- Verder instelbaar: vanaf hoeveel dagen 'Verloopt binnenkort' verschijnt en
+  na hoeveel tijd de app automatisch vergrendelt.
+- Zet je een functie uit, dan blijven de bestaande gegevens bewaard (verborgen).
+- De instellingen worden mee versleuteld en zitten in je back-up.
+- Wie de app al gebruikte met klanten of bankkaarten: die functies blijven
+  automatisch aan staan na de update.
+
 Goed om te weten
 - Gegevens worden versleuteld (AES-256) op het toestel bewaard met je code.
   Code vergeten = gegevens kwijt. Maak geregeld een back-up via Instellingen.

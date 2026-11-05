@@ -1,6 +1,8 @@
 KAARTBEHEER – installeren op je iPhone
 ======================================
 
+De volledige handleiding staat in HANDLEIDING.md.
+
 De app werkt na installatie volledig offline. Ze moet wel één keer via een
 https-adres geopend worden, zodat de iPhone ze kan bewaren.
 
